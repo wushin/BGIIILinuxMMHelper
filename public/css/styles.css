@@ -1,0 +1,400 @@
+* {
+  transition: background-color 300ms ease, color 300ms ease;
+}
+*:focus {
+  outline: none;
+}
+html, body {
+  height: 100%;
+  background-color: rgba(200, 200, 200, 1);
+  color: rgba(0, 0, 0, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+header {
+  padding: .4rem 0 0;
+}
+.menu {
+  padding: .4rem 2rem;
+  border-bottom: 1px solid rgba(45, 45, 45, 1);
+}
+header .heroe {
+  text-align: center;
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 6px 6px;
+}
+header .heroe h1 {
+  font-size: 2.5rem;
+  font-weight: 500;
+}
+header .heroe h2 {
+  font-size: 22pt;
+  font-weight: 300;
+}
+section {
+  margin: 0 auto;
+  max-width: 1100px;
+  padding: 2.5rem 1.75rem 3.5rem 1.75rem;
+}
+section h1 {
+  margin-bottom: 2.5rem;
+}
+section h2 {
+  font-size: 120%;
+  line-height: 2.5rem;
+  padding-top: 1.5rem;
+}
+section pre {
+  background-color: rgba(247, 248, 249, 1);
+  border: 1px solid rgba(242, 242, 242, 1);
+  display: block;
+  font-size: .9rem;
+  margin: 2rem 0;
+  padding: 1rem 1.5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+section code {
+  display: block;
+}
+section a {
+  color: rgba(20, 20, 20, 1);
+}
+section svg {
+  margin-bottom: -5px;
+  margin-right: 5px;
+  width: 25px;
+}
+.further {
+  background-color: rgba(247, 248, 249, 1);
+  border-bottom: 1px solid rgba(242, 242, 242, 1);
+  border-top: 1px solid rgba(242, 242, 242, 1);
+}
+.further h2:first-of-type {
+  padding-top: 0;
+}
+.svg-stroke {
+  fill: none;
+  stroke: #000;
+  stroke-width: 32px;
+}
+footer {
+  background-color: rgba(221, 72, 20, .8);
+  text-align: center;
+}
+footer .environment {
+  color: rgba(255, 255, 255, 1);
+  padding: 2rem 1.75rem;
+}
+footer .copyrights {
+  background-color: rgba(60, 60, 60, 1);
+  color: rgba(200, 200, 200, 1);
+  padding: .25rem 1.75rem;
+}
+@media (max-width: 629px) {
+  header ul {
+    padding: 0;
+  }
+  header .menu-toggle {
+    padding: 0 1rem;
+  }
+  header .menu-item {
+    background-color: rgba(244, 245, 246, 1);
+    border-top: 1px solid rgba(242, 242, 242, 1);
+    margin: 0 15px;
+    width: calc(100% - 30px);
+  }
+  header .menu-toggle {
+    display: block;
+  }
+  header .hidden {
+    display: none;
+  }
+  header li.menu-item a {
+    background-color: rgba(221, 72, 20, .1);
+  }
+  header li.menu-item a:hover,
+  header li.menu-item a:focus {
+    background-color: rgba(221, 72, 20, .7);
+    color: rgba(255, 255, 255, .8);
+  }
+}
+ul, #myUL {
+  list-style-type: none;
+}
+#myUL {
+  margin: 0;
+  padding: 0;
+}
+.caret {
+  cursor: pointer;
+  user-select: none;
+}
+.caret::before {
+  content: "\25B6";
+  color: black;
+  display: inline-block;
+  margin-right: 6px;
+}
+.caret-down::before {
+  transform: rotate(90deg);
+}
+.nested {
+  display: block;
+}
+.active {
+  display: none;
+}
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.column {
+  float: left;
+}
+.left {
+  min-width: 20%;
+  field-sizing: content;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 1100px;
+}
+.middle {
+  min-width: 20%;
+  field-sizing: content;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 1100px;
+}
+.right {
+  field-sizing: content;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 1100px;
+  justify-content: center;
+  max-width: 1450px;
+  min-width: 1450px;
+  flex-direction: column;
+}
+div#searchDiv, div#displayDiv {
+  field-sizing: content;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  max-width: 1450px;
+  min-width: 1450px;
+  flex-direction: column;
+}
+textarea {
+  field-sizing: content;
+  min-width: 550px;
+  max-width: 550px;
+  min-height: 50px;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  font-size: 16px;
+  resize: none;
+}
+textarea.nodisplay {
+  display: none;
+}
+div.display {
+  max-width: 1350px;
+  min-width: 1350px;
+  width: 100%;
+  min-height: 100px;
+  padding: 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1rem;
+  background-color: white;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap; /* Preserve line breaks */
+  outline: none; /* remove blue focus border */
+}
+.highlight {
+    background-color: yellow;
+    color: black;
+    font-weight: bold;
+}
+div#fileName {
+  background-color: floralwhite;
+  max-width: 1350px;
+  min-width: 1350px;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+}
+.flash-green {
+  animation: flashGreenAndFade 1s forwards;
+}
+@keyframes flashGreenAndFade {
+  0% { background-color: defaultColor; }
+  4% { background-color: green; }
+  100% { background-color: defaultColor; }
+}
+.flash-red {
+  animation: flashRedAndFade 1s forwards;
+}
+@keyframes flashRedAndFade {
+  0% { background-color: defaultColor; }
+  4% { background-color: red; }
+  100% { background-color: defaultColor; }
+}
+img.dynImg {
+  background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+input {
+  field-sizing: content;
+  min-height: 50px;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  font-size: 16px;
+  resize: none;
+}
+input.contentuid {
+  min-width: 375px;
+}
+input.version {
+}
+div.langline {
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 2px;
+}
+textarea#UUID, textarea#ContentUID {
+  vertical-align: middle;
+  field-sizing: content;
+  text-align: justify;
+  text-align-last: center;
+  min-width: 400px;
+  max-width: 400px;
+  min-height: 20px;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  font-size: 16px;
+  resize: none;
+}
+input#replace, input#search {
+    vertical-align: middle;
+    field-sizing: content;
+    text-align: justify;
+    text-align-last: center;
+    min-width: 400px;
+    max-width: 400px;
+    min-height: 20px;
+    padding: 6px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    font-size: 16px;
+    resize: none;
+}
+.dropbtn {
+  background-color: rgba(80, 80, 80, 1);
+  color: white;
+  padding: 16px;
+  font-size: 16px;
+  border: none;
+}
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+div#right.dropdown {
+  float: right;
+}
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+.dropdown-content a {
+  min-width: 400px;
+  text-align: justify;
+  text-align-last: center;
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+.dropdown-content a:hover {background-color: #ddd;}
+.dropdown:hover .dropdown-content {display: block;}
+.dropdown:hover .dropbtn {background-color: rgba(160, 160, 160, 1);}
+.nodrop {
+
+}
+a.nodrop:link, a.nodrop:visited {
+  color: white;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+.rmDiv {
+  field-sizing: content;
+  min-height: 50px;
+  min-width: 50px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  background-color: rgba(80, 80, 80, 1);
+  resize: none;
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.rmDiv:hover {
+    color: rgba(0, 0, 0, 1);
+}
+.homeDiv {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.homeText {
+  min-width: 1050px;
+  max-width: 1050px;
+  text-align: center;
+}

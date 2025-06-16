@@ -1,0 +1,24 @@
+version: '3.6'
+
+networks:
+    web-network:
+
+services:
+    bg3mmh:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            network: host
+        container_name: bg3mmh
+        command: /bin/sh -c "cd /var/www/ && php spark serve --host 0.0.0.0"
+        ports:
+            - '8080:8080'
+        volumes:
+            - ./:/var/www/
+            - <ABS PATH TO UNPACKED MODS>:/var/www/public/AllMods/
+            - <ABS PATH TO MODS TO DEVELOP>:/var/www/public/MyMods/
+            - <ABS PATH TO UNPACKED GAME DATA>:/var/www/public/GameData/
+        restart: "no"
+        networks:
+            - web-network
+
