@@ -6,6 +6,7 @@ use CodeIgniter\Model;
 
 use App\Helpers\XmlHelper;
 use App\Helpers\ArrayHelper;
+use App\Helpers\FilePathHelper;
 use App\Helpers\TextParserHelper;
 
 class BG3readwriteparse extends Model {
@@ -27,21 +28,8 @@ class BG3readwriteparse extends Model {
     }
   }
 
-  private function strip_quotes($str) {
-    return trim($str, "\"'");
-  }
-
-  private function testFile($file) {
-    $test = file($file);
-    $x = 0;
-    foreach($test as $line) {
-      $x++;
-    }
-    return ($x > 3) ? true : false;
-  }
-
   private function parseLang($langfile) {
-    if ($this->testFile($langfile)) {
+    if (FilePathHelper::testFile($langfile)) {
       $xml = file_get_contents($langfile);
       $this->_Lang[$langfile] = XmlHelper::createArray($xml);
     } else {
@@ -260,7 +248,7 @@ class BG3readwriteparse extends Model {
   }
 
   public function writeLang($filepath, $data=false, $save=false) {
-    if ($this->testFile($filepath)) {
+    if (FilePathHelper::testFile($filepath)) {
       XmlHelper::init(null,null,null,false);
       if($data) {
         $xml_string = XmlHelper::createXML('contentList',$data)->saveXML();
