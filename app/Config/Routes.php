@@ -9,13 +9,16 @@ use App\Controllers\UUIDContentUIDGen;
  */
 $routes->get('/', 'Home::index');
 $routes->get('mods', 'Home::index');
-$routes->get('mods/(:segment)/', [Mods::class, 'index/$1/']);
-$routes->get('mods/(:segment)/(:segment)/', [Mods::class, 'index/$1/$2/']);
-$routes->get('mods/(:segment)/(:segment)/(:any)', [Mods::class, 'index/$1/$2/$3']);
-$routes->get('display/(:segment)/(:segment)/(:any)', [Mods::class, 'display/$1/$2/$3/']);
-$routes->get('search/(:segment)/(:segment)/(:any)', [Mods::class, 'search/$1/$2/$3']);
-$routes->get('replace/(:segment)/(:segment)/(:segment)/(:any)', [Mods::class, 'replace/$1/$2/$3/$4']);
+
+$routes->get('mods/(:segment)', [Mods::class, 'index']);
+$routes->get('mods/(:segment)/(:segment)', [Mods::class, 'index']);
+$routes->get('mods/(:segment)/(:segment)/(:any)', [Mods::class, 'index']);
+
+$routes->get('display/(:segment)/(:segment)/(:any)', [Mods::class, 'display']);
+$routes->get('search/(:segment)/(:segment)/(:any)', [Mods::class, 'search']);
+$routes->get('replace/(:segment)/(:segment)/(:segment)/(:any)', [Mods::class, 'replace']);
+
 $routes->get('uuidcontentuidgen', [UUIDContentUIDGen::class, 'index']);
-$routes->get('uuidcontentuidgen/(:any)', [UUIDContentUIDGen::class, 'index/$1']);
+$routes->get('uuidcontentuidgen/(:any)', [UUIDContentUIDGen::class, 'index']);
 
 $routes->post('save', [Mods::class, 'save']);
