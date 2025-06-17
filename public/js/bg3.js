@@ -38,6 +38,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
   enableCopyOnClick("UUID");
   enableCopyOnClick("ContentUID");
+
+  const displayDiv = document.getElementById('displayDiv');
+  const searchDiv = document.getElementById('searchDiv');
+
+  const displayHTML = sessionStorage.getItem('displayDiv');
+  const searchHTML = sessionStorage.getItem('searchDiv');
+
+  if (displayHTML) {
+    displayDiv.innerHTML = displayHTML;
+
+    // Re-apply textarea/input autosizing
+    const textareas = displayDiv.querySelectorAll('textarea');
+    textareas.forEach(el => {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    });
+
+    const versionInputs = displayDiv.querySelectorAll('input.version');
+    versionInputs.forEach(el => {
+      const tmp = document.createElement('span');
+      tmp.style.visibility = 'hidden';
+      tmp.style.position = 'absolute';
+      tmp.style.whiteSpace = 'pre';
+      tmp.style.font = getComputedStyle(el).font;
+      tmp.textContent = el.value || el.placeholder || '';
+      document.body.appendChild(tmp);
+      const textWidth = tmp.offsetWidth;
+      el.style.width = (textWidth + 44) + 'px';
+      document.body.removeChild(tmp);
+    });
+  }
+
+  if (searchHTML) {
+    searchDiv.innerHTML = searchHTML;
+  }
 });
 
 // --- Core Actions ---
@@ -174,3 +209,7 @@ document.getElementById('replace')?.addEventListener('keydown', e => {
   }
 });
 
+window.addEventListener('beforeunload', () => {
+  sessionStorage.setItem('displayDiv', document.getElementById('displayDiv')?.innerHTML || '');
+  sessionStorage.setItem('searchDiv', document.getElementById('searchDiv')?.innerHTML || '');
+});
