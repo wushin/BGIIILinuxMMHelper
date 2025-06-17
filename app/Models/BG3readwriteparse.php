@@ -4,9 +4,8 @@ namespace App\Models;
 
 use CodeIgniter\Model;
 
-use LaLit\XML2Array;
-use LaLit\Array2XML;
-helper('BG3');
+use App\Helpers\XmlHelper as Array2XML;
+use App\Helpers\XmlHelper as XML2Array;
 
 class BG3readwriteparse extends Model {
 
