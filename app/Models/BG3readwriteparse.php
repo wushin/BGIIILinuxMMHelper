@@ -6,6 +6,7 @@ use CodeIgniter\Model;
 
 use App\Helpers\XmlHelper as Array2XML;
 use App\Helpers\XmlHelper as XML2Array;
+use App\Helpers\TextParserHelper;
 
 class BG3readwriteparse extends Model {
 
@@ -63,79 +64,7 @@ class BG3readwriteparse extends Model {
 
   private function parseTxt($filepath) {
     $data = file($filepath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    $this->_Data[$filepath] = $this->txt2Array($data);
-  }
-
-  private function string2Array($txt) {
-    $data = file('data://text/plain,' . urlencode($txt), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    return $this->txt2Array($data);
-  }
-
-  private function txt2Array($data) {
-    $result = [];
-    $current = null;
-
-    foreach ($data as $line) {
-      $line = trim($line);
-      if (stripos($line, 'new entry') === 0) {
-          if ($current) $result[] = $current;
-          $id = strip_quotes(trim(str_replace('new entry', '', $line)));
-          $current = ['type' => 'entry', 'id' => $id, 'properties' => []];
-      } elseif (stripos($line, 'new equipment') === 0) {
-          if ($current) $result[] = $current;
-          $id = strip_quotes(trim(str_replace('new equipment', '', $line)));
-          $current = ['type' => 'equipment', 'id' => $id, 'initialWeaponSet' => null, 'equipmentGroups' => []];
-      } elseif (stripos($line, 'new treasuretable') === 0) {
-          if ($current) $result[] = $current;
-          $id = strip_quotes(trim(str_replace('new treasuretable', '', $line)));
-          $current = ['type' => 'treasuretable', 'id' => $id, 'subtables' => []];
-      } elseif ($current && $current['type'] === 'equipment') {
-          if (stripos($line, 'add initialweaponset') === 0) {
-              $current['initialWeaponSet'] = strip_quotes(trim(str_replace('add initialweaponset', '', $line)));
-          } elseif (stripos($line, 'add equipment entry') === 0) {
-              $entry = strip_quotes(trim(str_replace('add equipment entry', '', $line)));
-              $lastGroupIndex = count($current['equipmentGroups']) - 1;
-              if ($lastGroupIndex < 0) $current['equipmentGroups'][] = [];
-              $current['equipmentGroups'][$lastGroupIndex][] = $entry;
-          } elseif (stripos($line, 'add equipmentgroup') === 0) {
-              $current['equipmentGroups'][] = [];
-          }
-      } elseif ($current && $current['type'] === 'treasuretable') {
-          if (stripos($line, 'new subtable') === 0) {
-              $weight = strip_quotes(trim(str_replace('new subtable', '', $line)));
-              $current['subtables'][] = ['type' => 'subtable', 'weight' => $weight, 'items' => []];
-          } elseif (preg_match('/^object category\s+"?([^"]+)"?,\d.*$/', $line, $matches)) {
-              $i = count($current['subtables']) - 1;
-              if ($i >= 0) $current['subtables'][$i]['items'][] = strip_quotes($matches[1]);
-          } elseif (preg_match('/^(StartLevel|EndLevel)\s+"?(\d+)"?$/', $line, $matches)) {
-              $i = count($current['subtables']) - 1;
-              if ($i >= 0) $current['subtables'][$i][$matches[1]] = (int)$matches[2];
-          }
-      } elseif ($current && in_array($current['type'], ['entry', 'equipment', 'treasuretable'])) {
-          if (preg_match('/^(data|using|type)\s+"([^"]+)"\s*"?(.*?)"?$/', $line, $matches)) {
-              $key = $matches[1];
-              $subkey = strip_quotes($matches[2]);
-              $value = strip_quotes($matches[3]);
-
-              if (!isset($current['properties'][$key])) {
-                  $current['properties'][$key] = [];
-              }
-
-              if ($key === 'data') {
-                  $current['properties'][$key][] = [$subkey => $value];
-              } elseif ($key === 'using') {
-                  $current['properties'][$key][] = $subkey;
-              } elseif ($key === 'type') {
-                  $current['properties']['declared_type'] = $subkey;
-              }
-          } elseif (preg_match('/^(\w+)\s+"([^"]+)"$/', $line, $matches)) {
-              $current['properties'][$matches[1]] = strip_quotes($matches[2]);
-          }
-       }
-    }
-
-    if ($current) $result[] = $current;
-    return $result;
+    $this->_Data[$filepath] = TextParserHelper::txt2Array($data);
   }
 
   private function buildDataSet($moddir) {
@@ -376,7 +305,7 @@ class BG3readwriteparse extends Model {
   }
 
   public function writeTxt($filepath, $save=false) {
-    $data = $this->array2Txt($this->_Data[$filepath]);
+    $data = TextParserHelper::array2Txt($this->_Data[$filepath]);
     if ($save) {
       file_put_contents($filepath, preg_replace("/\r\n?/", "\n", $data));
     }
@@ -384,81 +313,11 @@ class BG3readwriteparse extends Model {
   }
 
   public function writeTxtRaw($filepath, $txt, $save=false) {
-    $data = preg_replace("/\r\n?/", "\n", $this->array2Txt($this->string2Array($txt)));
+    $data = preg_replace("/\r\n?/", "\n", TextParserHelper::array2Txt(TextParserHelper::string2Array($txt)));
     if ($save) {
       file_put_contents($filepath, $data);
     }
     return $data;
-  }
-
-  private function array2Txt($txt) {
-    $lines = [];
-    foreach ($txt as $entry) {
-      switch ($entry['type']) {
-          case 'entry':
-              $lines[] = 'new entry "' . $entry['id'] . '"';
-              if (isset($entry['properties']['declared_type'])) {
-                  $lines[] = 'type "' . $entry['properties']['declared_type'] . '"';
-              }
-              break;
-          case 'equipment':
-              $lines[] = 'new equipment "' . $entry['id'] . '"';
-              if ($entry['initialWeaponSet']) {
-                  $lines[] = 'add initialweaponset "' . $entry['initialWeaponSet'] . '"';
-              }
-              foreach ($entry['equipmentGroups'] as $group) {
-                  $lines[] = 'add equipmentgroup';
-                  foreach ($group as $equipEntry) {
-                      $lines[] = 'add equipment entry "' . $equipEntry . '"';
-                  }
-              }
-              break;
-          case 'treasuretable':
-              $lines[] = 'new treasuretable "' . $entry['id'] . '"';
-              foreach ($entry['subtables'] as $sub) {
-                  $lines[] = 'new subtable "' . $sub['weight'] . '"';
-                  if (isset($sub['StartLevel'])) {
-                      $lines[] = 'StartLevel "' . $sub['StartLevel'] . '"';
-                  }
-                  if (isset($sub['EndLevel'])) {
-                      $lines[] = 'EndLevel "' . $sub['EndLevel'] . '"';
-                  }
-                  foreach ($sub['items'] as $item) {
-                      $lines[] = 'object category "' . $item . '",1';
-                  }
-              }
-              break;
-      }
-
-      // Shared property block
-      if (!empty($entry['properties'])) {
-          foreach ($entry['properties'] as $key => $value) {
-              if ($key === 'data' && is_array($value)) {
-                  foreach ($value as $pair) {
-                      foreach ($pair as $k => $v) {
-                          $lines[] = 'data "' . $k . '" "' . $v . '"';
-                      }
-                  }
-              } elseif ($key === 'using' && is_array($value)) {
-                  foreach ($value as $v) {
-                      $lines[] = 'using "' . $v . '"';
-                  }
-              } elseif ($key !== 'declared_type') {
-                  if (is_array($value)) {
-                      foreach ($value as $v) {
-                          $lines[] = $key . ' "' . $v . '"';
-                      }
-                  } else {
-                      $lines[] = $key . ' "' . $value . '"';
-                  }
-               }
-          }
-      }
-
-      $lines[] = ''; // Separate entries with a blank line
-    }
-
-    return implode("\n", $lines);
   }
 }
 ?>
