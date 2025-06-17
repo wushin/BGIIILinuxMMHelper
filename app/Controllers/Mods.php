@@ -45,7 +45,7 @@ class Mods extends BaseController
         }
         $htmlout = "";
         foreach ($files as $key => $value) {
-          $htmlout .= "<div id='fileName'>".FilePathHelper::getFileName($path,$key)." <button id=\"viewFile\" onclick=\"display('".FilePathHelper::getFileUrlPath($path,$key)."')\">Edit</button></div>".$bgdata->draw($key,$term);
+          $htmlout .= "<div id='fileName'>".FilePathHelper::getFileName($path,$key)." <button id=\"viewFile\" onclick=\"display('".FilePathHelper::getFileUrlPath($path,$key)."')\">Open</button></div>".$bgdata->draw($key,$term);
         }
         if (strlen($htmlout) == 0) {
           $htmlout = "<div id='fileName'>No Results Found!</div>";

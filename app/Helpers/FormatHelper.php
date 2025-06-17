@@ -27,7 +27,7 @@ class FormatHelper
             } else {
                 $encodedPath = htmlspecialchars(FilePathHelper::getFileUrlPath($path, $relativePath));
                 $html .= '<li>' . htmlspecialchars($node) .
-                         ' <button id="viewFile" onclick="display(\'' . $encodedPath . '\')">Edit</button></li>';
+                         ' <button id="viewFile" onclick="display(\'' . $encodedPath . '\')">Open</button></li>';
             }
         }
 
