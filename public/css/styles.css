@@ -20,8 +20,17 @@ header {
   padding: .4rem 0 0;
 }
 .menu {
-  padding: .4rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 2rem;
   border-bottom: 1px solid rgba(45, 45, 45, 1);
+  flex-wrap: wrap;
+}
+.right-group {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
 }
 header .heroe {
   text-align: center;
@@ -335,9 +344,6 @@ input#replace, input#search {
 .dropdown {
   position: relative;
   display: inline-block;
-}
-div#right.dropdown {
-  float: right;
 }
 .dropdown-content {
   display: none;
