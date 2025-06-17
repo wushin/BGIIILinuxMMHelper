@@ -87,23 +87,6 @@ class BG3readwriteparse extends Model {
     }
   }
 
-  private function array_recursive_search_key_map($needle, $haystack) {
-    $results = array();
-    $iterator = new \RecursiveIteratorIterator(new \RecursiveArrayIterator($haystack));
-    foreach ($iterator as $key => $value) {
-      if (!is_array($value) && preg_match('/'.$needle.'/',trim($value))) {
-        $path = array();
-        for ($depth = $iterator->getDepth(); $depth >= 0; $depth--) {
-          $subIterator = $iterator->getSubIterator($depth);
-          $path[] = $subIterator->key();
-        }
-        $path = array_reverse($path);
-        $results[] = $path;
-      }
-    }
-    return $results;
-  }
-
   public function getLang() {
     return $this->_Lang;
   }
