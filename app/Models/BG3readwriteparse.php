@@ -216,13 +216,7 @@ class BG3readwriteparse extends Model {
     } else {
       $xml_string = XmlHelper::createXML('save',$this->_Data[$filepath]['save'])->saveXML();
     }
-    $pattern = '/"><\\/(.*?)\\>/';
-    $replacement = '"/>';
-    $new_xml_string = preg_replace($pattern, $replacement, $xml_string);
-    $dom = new \DOMDocument();
-    $dom->preserveWhiteSpace = false;
-    $dom->loadXML($new_xml_string);
-    $dom->formatOutput = true;
+    $dom = XmlHelper::createFormattedDOM(XmlHelper::minifyEmptyTags($xml_string));
     if ($save) {
       $xml = $dom->saveXML();
       file_put_contents($filepath, html_entity_decode($xml));
@@ -238,13 +232,7 @@ class BG3readwriteparse extends Model {
       } else {
         $xml_string = XmlHelper::createXML('contentList',$this->_Lang[$filepath]['contentList'])->saveXML();
       }
-      $pattern = '/"><\\/(.*?)\\>/';
-      $replacement = '"/>';
-      $new_xml_string = preg_replace($pattern, $replacement, $xml_string);
-      $dom = new \DOMDocument();
-      $dom->preserveWhiteSpace = false;
-      $dom->loadXML($new_xml_string);
-      $dom->formatOutput = true;
+      $dom = XmlHelper::createFormattedDOM(XmlHelper::minifyEmptyTags($xml_string));
       if ($save) {
         $xml = $dom->saveXML();
         $xml = preg_replace('/<contentList>/', '<contentList xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">', $xml);

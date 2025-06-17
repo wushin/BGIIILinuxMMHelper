@@ -4,9 +4,18 @@ namespace App\Helpers;
 
 class XmlHelper
 {
-    /**
-     * Equivalent to XML2Array::createArray($xmlString)
-     */
+    public static function minifyEmptyTags(string $xml): string {
+        return preg_replace('/"><\\/(.*?)\\>/', '"/>', $xml);
+    }
+
+    public static function createFormattedDOM(string $xml): \DOMDocument {
+        $dom = new \DOMDocument();
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = true;
+        $dom->loadXML($xml);
+        return $dom;
+    }
+
     public static function createArray(string $xmlContent): array
     {
         $dom = new \DOMDocument();
@@ -17,9 +26,6 @@ class XmlHelper
         return [ $root->nodeName => self::elementToArray($root) ];
     }
 
-    /**
-     * Equivalent to Array2XML::createXML($root, $array)
-     */
     public static function createXML(string $rootElement, array $data): \DOMDocument
     {
         $dom = new \DOMDocument('1.0', 'UTF-8');
