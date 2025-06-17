@@ -4,8 +4,7 @@ namespace App\Models;
 
 use CodeIgniter\Model;
 
-use App\Helpers\XmlHelper as Array2XML;
-use App\Helpers\XmlHelper as XML2Array;
+use App\Helpers\XmlHelper;
 use App\Helpers\TextParserHelper;
 
 class BG3readwriteparse extends Model {
@@ -43,7 +42,7 @@ class BG3readwriteparse extends Model {
   private function parseLang($langfile) {
     if ($this->testFile($langfile)) {
       $xml = file_get_contents($langfile);
-      $this->_Lang[$langfile] = XML2Array::createArray($xml);
+      $this->_Lang[$langfile] = XmlHelper::createArray($xml);
     } else {
       $this->_Lang[$langfile] = "Empty";
     }
@@ -51,7 +50,7 @@ class BG3readwriteparse extends Model {
 
   private function parseLsx($filepath) {
     $xml = file_get_contents($filepath);
-    $this->_Data[$filepath] = XML2Array::createArray($xml);
+    $this->_Data[$filepath] = XmlHelper::createArray($xml);
   }
 
   private function parseImg($type, $filepath) {
@@ -258,11 +257,11 @@ class BG3readwriteparse extends Model {
   }
 
   public function writeXml($filepath, $data=false, $save=false) {
-    Array2XML::init(null,null,null,false);
+    XmlHelper::init(null,null,null,false);
     if($data) {
-      $xml_string = Array2XML::createXML('save',XML2Array::createArray($data)['save'])->saveXML();
+      $xml_string = XmlHelper::createXML('save',XmlHelper::createArray($data)['save'])->saveXML();
     } else {
-      $xml_string = Array2XML::createXML('save',$this->_Data[$filepath]['save'])->saveXML();
+      $xml_string = XmlHelper::createXML('save',$this->_Data[$filepath]['save'])->saveXML();
     }
     $pattern = '/"><\\/(.*?)\\>/';
     $replacement = '"/>';
@@ -280,11 +279,11 @@ class BG3readwriteparse extends Model {
 
   public function writeLang($filepath, $data=false, $save=false) {
     if ($this->testFile($filepath)) {
-      Array2XML::init(null,null,null,false);
+      XmlHelper::init(null,null,null,false);
       if($data) {
-        $xml_string = Array2XML::createXML('contentList',$data)->saveXML();
+        $xml_string = XmlHelper::createXML('contentList',$data)->saveXML();
       } else {
-        $xml_string = Array2XML::createXML('contentList',$this->_Lang[$filepath]['contentList'])->saveXML();
+        $xml_string = XmlHelper::createXML('contentList',$this->_Lang[$filepath]['contentList'])->saveXML();
       }
       $pattern = '/"><\\/(.*?)\\>/';
       $replacement = '"/>';
