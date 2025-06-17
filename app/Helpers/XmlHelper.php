@@ -16,6 +16,20 @@ class XmlHelper
         return $dom;
     }
 
+    public static function injectXmlNamespaces(string $xml, string $tagName, array $namespaces): string
+    {
+        $namespaceString = '';
+        foreach ($namespaces as $prefix => $url) {
+            $namespaceString .= " xmlns:$prefix=\"$url\"";
+        }
+
+        return preg_replace(
+            "/<$tagName>/",
+            "<$tagName$namespaceString>",
+            $xml
+        );
+    }
+
     public static function createArray(string $xmlContent): array
     {
         $dom = new \DOMDocument();

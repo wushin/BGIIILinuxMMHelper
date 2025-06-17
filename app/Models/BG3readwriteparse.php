@@ -235,7 +235,7 @@ class BG3readwriteparse extends Model {
       $dom = XmlHelper::createFormattedDOM(XmlHelper::minifyEmptyTags($xml_string));
       if ($save) {
         $xml = $dom->saveXML();
-        $xml = preg_replace('/<contentList>/', '<contentList xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">', $xml);
+        $xml = XmlHelper::injectXmlNamespaces($xml, 'contentList', ['xsd' => 'http://www.w3.org/2001/XMLSchema','xsi' => 'http://www.w3.org/2001/XMLSchema-instance']);
         file_put_contents($filepath, $xml);
       }
       return $dom->saveXML();
