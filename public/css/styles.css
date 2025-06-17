@@ -169,9 +169,34 @@ ul, #myUL {
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  flex-wrap: nowrap;
 }
 .column {
   float: left;
+  min-width: 0;
+}
+.column.left ul li {
+  margin-bottom: 0.5rem;
+}
+.column.left input {
+  margin-bottom: 0.25rem;
+}
+.form-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.form-row label {
+  min-width: 70px;
+  margin-right: 0.5rem;
+  font-weight: bold;
+}
+.file-list {
+  margin-top: 1.5rem;
+}
+.file-list > strong {
+  display: block;
+  margin-bottom: 0.5rem;
 }
 .left {
   min-width: 20%;
@@ -193,6 +218,17 @@ ul, #myUL {
   overflow: auto;
   max-height: 1100px;
 }
+.column.middle {
+  flex: 1;
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
 .right {
   field-sizing: content;
   padding: 12px 20px;
@@ -207,17 +243,13 @@ ul, #myUL {
   flex-direction: column;
 }
 div#searchDiv, div#displayDiv {
-  field-sizing: content;
-  padding: 12px 20px;
+  overflow-x: auto;
+  overflow-y: auto;
+  white-space: pre;
+  word-wrap: normal;
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
-  border: 2px solid #ccc;
-  border-radius: 4px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  max-width: 1450px;
-  min-width: 1450px;
-  flex-direction: column;
 }
 textarea {
   field-sizing: content;
@@ -235,33 +267,19 @@ textarea {
 textarea.nodisplay {
   display: none;
 }
-div.display {
-  max-width: 1350px;
-  min-width: 1350px;
-  width: 100%;
-  min-height: 100px;
-  padding: 0.5em;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 1rem;
-  background-color: white;
-  resize: vertical;
-  overflow: auto;
-  white-space: pre-wrap; /* Preserve line breaks */
-  outline: none; /* remove blue focus border */
-}
 .highlight {
     background-color: yellow;
     color: black;
     font-weight: bold;
 }
 div#fileName {
-  background-color: floralwhite;
-  max-width: 1350px;
-  min-width: 1350px;
-  padding: 12px 20px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 100%;
   box-sizing: border-box;
+  background-color: floralwhite;
+  padding: 12px 20px;
   border: 2px solid #ccc;
   border-radius: 4px;
 }
@@ -306,6 +324,22 @@ div.langline {
   display: flex;
   align-items: flex-start;
   padding: 2px 2px;
+}
+div.display {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: auto;
+  padding: 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1rem;
+  background-color: white;
+  resize: vertical;
 }
 textarea#UUID, textarea#ContentUID {
   vertical-align: middle;
