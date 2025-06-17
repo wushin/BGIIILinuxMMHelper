@@ -5,6 +5,7 @@ namespace App\Models;
 use CodeIgniter\Model;
 
 use App\Helpers\XmlHelper;
+use App\Helpers\ArrayHelper;
 use App\Helpers\TextParserHelper;
 
 class BG3readwriteparse extends Model {
@@ -115,25 +116,6 @@ class BG3readwriteparse extends Model {
     return $results;
   }
 
-  private function array_get_nested_value($results, $array) {
-    foreach ($results as $keymap) {
-      $nest_depth = sizeof($keymap);
-      $value = $array;
-      for ($i = 0; $i < $nest_depth; $i++) {
-        $value = $value[$keymap[$i]];
-      }
-      return $value;
-    }
-  }
-
-  private function set_nested_array_value(&$array, $path, $newvalue) {
-    $current = &$array;
-    foreach ($path as $key => $value) {
-      $current = &$current[$value];
-    }
-    $current = $newvalue;
-  }
-
   public function getLang() {
     return $this->_Lang;
   }
@@ -149,24 +131,24 @@ class BG3readwriteparse extends Model {
 
   public function setDataBySearch($newvalue,$locations) {
     foreach ($locations as $path) {
-      $this->set_nested_array_value($this->_Data, $path, $newvalue);
+      ArrayHelper::setNestedValue($this->_Data, $path, $newvalue);
       $this->saveFile($path[0]);
     }
   }
 
   public function setLangBySearch($newvalue,$locations) {
     foreach ($locations as $path) {
-      $this->set_nested_array_value($this->_Lang, $path, $newvalue);
+      ArrayHelper::setNestedValue($this->_Lang, $path, $newvalue);
       $this->saveFile($path[0]);
     }
   }
 
   public function searchData($key) {
-    return $this->array_recursive_search_key_map($key, $this->_Data);
+    return ArrayHelper::recursiveSearchKeyMap($key, $this->_Data);
   }
 
   public function searchLang($key) {
-    return $this->array_recursive_search_key_map($key, $this->_Lang);
+    return ArrayHelper::recursiveSearchKeyMap($key, $this->_Lang);
   }
 
   public function findNReplace($oldvalue,$newvalue) {
