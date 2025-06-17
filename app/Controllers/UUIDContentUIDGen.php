@@ -2,27 +2,33 @@
 
 namespace App\Controllers;
 
-use Ramsey\Uuid\Uuid;
-
 class UUIDContentUIDGen extends BaseController
 {
-    public function index($type = "UUID")
+    public function index($type = "UUID"): string
     {
-        if ($type === "UUID") {
-          $data['ID'] = $this->generateUUID();
-        } elseif ($type === "ContentUID") {
-          $data['ID'] = $this->generateRandomString();
-        } else {
-          $data['ID'] = "Unrecognized Option";
+        switch ($type) {
+            case 'UUID':
+                $data['ID'] = $this->generateUUID();
+                break;
+            case 'ContentUID':
+                $data['ID'] = $this->generateRandomString();
+                break;
+            default:
+                $data['ID'] = 'Unrecognized Option';
         }
         return view('mods/uuidcontentuidshow', $data);
     }
 
-    public function generateUUID() {
-          return Uuid::uuid4()->toString();
+    private function generateUUID(): string
+    {
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
-    public function generateRandomString($length = 37) {
+    private function generateRandomString($length = 37): string
+    {
         $characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
         $charactersLength = strlen($characters);
         $randomString = '';
@@ -32,3 +38,4 @@ class UUIDContentUIDGen extends BaseController
         return $randomString;
     }
 }
+?>
