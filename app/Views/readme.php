@@ -1,1 +1,1 @@
-<div class="homeDiv"><textarea class="homeText"><?php echo $readme ?></textarea></div>
+<main class="homeContainer"><div class="homeDiv"><div class="display"><?php echo $readme ?></div></div></main>

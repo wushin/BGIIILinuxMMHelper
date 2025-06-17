@@ -136,12 +136,43 @@ function display(filepath) {
       return response.text();
     })
     .then(data => {
-      document.getElementById('displayDiv').innerHTML = data;
+      const displayDiv = document.getElementById('displayDiv');
+      displayDiv.innerHTML = data;
+
+      // Auto-resize textareas by height
+      const textareas = displayDiv.querySelectorAll('textarea');
+      textareas.forEach(el => {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+      });
+
+      // Auto-resize input.version by width
+      const versionInputs = displayDiv.querySelectorAll('input.version');
+      versionInputs.forEach(el => {
+        const tmp = document.createElement('span');
+        tmp.style.visibility = 'hidden';
+        tmp.style.position = 'absolute';
+        tmp.style.whiteSpace = 'pre';
+        tmp.style.font = getComputedStyle(el).font;
+        tmp.textContent = el.value || el.placeholder || '';
+        document.body.appendChild(tmp);
+        const textWidth = tmp.offsetWidth;
+        el.style.width = (textWidth + 44) + 'px'; // Add padding + border width
+        document.body.removeChild(tmp);
+      });
     })
     .catch(error => {
       document.getElementById('displayDiv').innerHTML = 'Error: ' + error.message;
     });
 }
+
+document.addEventListener('input', event => {
+  if (event.target.tagName.toLowerCase() === 'textarea') {
+    event.target.style.height = 'auto';
+    event.target.style.height = event.target.scrollHeight + 'px';
+  }
+});
+
 function submitMainForm() {
   const form = document.getElementById('mainForm');
   const formData = new FormData(form);
@@ -239,3 +270,4 @@ document.getElementById('replace').addEventListener('keydown', function(event) {
     replace('search','replace');
   }
 });
+

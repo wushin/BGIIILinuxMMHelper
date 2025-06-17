@@ -7,8 +7,7 @@
 html, body {
   height: 100%;
   background-color: rgba(200, 200, 200, 1);
-  color: rgba(0, 0, 0, 1);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: system-ui, sans-serif;
   font-size: 16px;
   margin: 0;
   padding: 0;
@@ -24,90 +23,36 @@ header {
   align-items: center;
   gap: 1rem;
   padding: 0.4rem 2rem;
-  border-bottom: 1px solid rgba(45, 45, 45, 1);
+  border-bottom: 1px solid #2d2d2d;
   flex-wrap: wrap;
+  position: relative;
 }
-.right-group {
-  display: flex;
-  gap: 1rem;
-  margin-left: auto;
-}
-header .heroe {
+.menu .heroe {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
-  margin: 0 auto;
-  max-width: 1100px;
-  padding: 4px 6px;
+  pointer-events: none;
 }
-header .heroe h1 {
-  font-size: 2.5rem;
-  font-weight: 500;
-}
-header .heroe h2 {
+.menu .heroe h2 {
   font-size: 22pt;
   font-weight: 300;
   margin: 0.25rem 0;
   line-height: 1.2;
 }
-section {
-  margin: 0 auto;
-  max-width: 1100px;
-  padding: 2.5rem 1.75rem 3.5rem 1.75rem;
-}
-section h1 {
-  margin-bottom: 2.5rem;
-}
-section h2 {
-  font-size: 120%;
-  line-height: 2.5rem;
-  padding-top: 1.5rem;
-}
-section pre {
-  background-color: rgba(247, 248, 249, 1);
-  border: 1px solid rgba(242, 242, 242, 1);
-  display: block;
-  font-size: .9rem;
-  margin: 2rem 0;
-  padding: 1rem 1.5rem;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-section code {
-  display: block;
-}
-section a {
-  color: rgba(20, 20, 20, 1);
-}
-section svg {
-  margin-bottom: -5px;
-  margin-right: 5px;
-  width: 25px;
-}
-.further {
-  background-color: rgba(247, 248, 249, 1);
-  border-bottom: 1px solid rgba(242, 242, 242, 1);
-  border-top: 1px solid rgba(242, 242, 242, 1);
-}
-.further h2:first-of-type {
-  padding-top: 0;
-}
-.svg-stroke {
-  fill: none;
-  stroke: #000;
-  stroke-width: 32px;
-}
 footer {
-  background-color: rgba(60, 60, 60, 1);
+  background-color: #3c3c3c;
   text-align: center;
   font-size: 0.75rem;
 }
 footer .environment {
-  color: rgba(255, 255, 255, 1);
+  color: #fff;
   padding: 0.4rem 0.75rem;
   line-height: 1.1;
 }
 footer .copyrights {
-  background-color: rgba(60, 60, 60, 1);
-  color: rgba(200, 200, 200, 1);
+  background-color: #3c3c3c;
+  color: #c8c8c8;
   padding: 0.2rem 1rem;
   font-size: 0.75rem;
 }
@@ -115,34 +60,35 @@ footer .copyrights {
   header ul {
     padding: 0;
   }
+
   header .menu-toggle {
     padding: 0 1rem;
+    display: block;
   }
+
   header .menu-item {
-    background-color: rgba(244, 245, 246, 1);
-    border-top: 1px solid rgba(242, 242, 242, 1);
+    background-color: #f4f5f6;
+    border-top: 1px solid #f2f2f2;
     margin: 0 15px;
     width: calc(100% - 30px);
   }
-  header .menu-toggle {
-    display: block;
-  }
+
   header .hidden {
     display: none;
   }
+
   header li.menu-item a {
-    background-color: rgba(221, 72, 20, .1);
+    background-color: rgba(221, 72, 20, 0.1);
   }
+
   header li.menu-item a:hover,
   header li.menu-item a:focus {
-    background-color: rgba(221, 72, 20, .7);
-    color: rgba(255, 255, 255, .8);
+    background-color: rgba(221, 72, 20, 0.7);
+    color: rgba(255, 255, 255, 0.8);
   }
 }
 ul, #myUL {
   list-style-type: none;
-}
-#myUL {
   margin: 0;
   padding: 0;
 }
@@ -161,9 +107,7 @@ ul, #myUL {
 }
 .nested {
   display: block;
-}
-.active {
-  display: none;
+  padding-left: 1.5em;
 }
 .row {
   display: flex;
@@ -172,7 +116,7 @@ ul, #myUL {
   flex-wrap: nowrap;
 }
 .column {
-  float: left;
+  flex-shrink: 0;
   min-width: 0;
 }
 .column.left ul li {
@@ -200,7 +144,6 @@ ul, #myUL {
 }
 .left {
   min-width: 20%;
-  field-sizing: content;
   padding: 12px 20px;
   box-sizing: border-box;
   border: 2px solid #ccc;
@@ -210,7 +153,6 @@ ul, #myUL {
 }
 .middle {
   min-width: 20%;
-  field-sizing: content;
   padding: 12px 20px;
   box-sizing: border-box;
   border: 2px solid #ccc;
@@ -230,42 +172,72 @@ ul, #myUL {
   min-width: 0;
 }
 .right {
-  field-sizing: content;
   padding: 12px 20px;
   box-sizing: border-box;
   border: 2px solid #ccc;
   border-radius: 4px;
   overflow: auto;
   max-height: 1100px;
-  justify-content: center;
   max-width: 1450px;
   min-width: 1450px;
-  flex-direction: column;
 }
-div#searchDiv, div#displayDiv {
-  overflow-x: auto;
-  overflow-y: auto;
+.right-group {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
+  align-items: center;
+}
+.right-group .dropdown {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.right-group textarea {
+  min-width: 375px;
+  max-width: 375px;
+  height: auto;
+  padding: 12px 20px;
+  font-size: 16px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  resize: none;
+  text-align: center;
+}
+.right-group .dropbtn {
+  margin-left: 0.5rem;
+  background-color: #444;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.right-group .dropbtn:hover {
+  background-color: #666;
+}
+div#searchDiv,
+div#displayDiv {
+  overflow: auto;
   white-space: pre;
-  word-wrap: normal;
   width: 100%;
-  max-width: 100%;
   box-sizing: border-box;
 }
 textarea {
-  field-sizing: content;
-  min-width: 550px;
-  max-width: 550px;
-  min-height: 50px;
+  width: 100%;
+  min-height: 20px;
   padding: 12px 20px;
   box-sizing: border-box;
   border: 2px solid #ccc;
   border-radius: 4px;
   background-color: #f8f8f8;
   font-size: 16px;
+  overflow: hidden;
+  white-space: pre-wrap;
   resize: none;
-}
-textarea.nodisplay {
-  display: none;
+  height: auto
 }
 .highlight {
     background-color: yellow;
@@ -273,39 +245,39 @@ textarea.nodisplay {
     font-weight: bold;
 }
 div#fileName {
-  word-break: break-word;
-  overflow-wrap: break-word;
-  white-space: normal;
-  max-width: 100%;
-  box-sizing: border-box;
   background-color: floralwhite;
-  padding: 12px 20px;
   border: 2px solid #ccc;
   border-radius: 4px;
+  box-sizing: border-box;
+  color: inherit;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  padding: 12px 20px;
+  white-space: normal;
+  word-break: break-word;
 }
 .flash-green {
   animation: flashGreenAndFade 1s forwards;
 }
-@keyframes flashGreenAndFade {
-  0% { background-color: defaultColor; }
-  4% { background-color: green; }
-  100% { background-color: defaultColor; }
-}
 .flash-red {
   animation: flashRedAndFade 1s forwards;
 }
+@keyframes flashGreenAndFade {
+  0%, 100% { background-color: inherit; }
+  4% { background-color: green; }
+}
 @keyframes flashRedAndFade {
-  0% { background-color: defaultColor; }
+  0%, 100% { background-color: inherit; }
   4% { background-color: red; }
-  100% { background-color: defaultColor; }
 }
 img.dynImg {
+  display: block;
+  margin: 0 auto;
   background-image: linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%);
   background-size: 20px 20px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
 input {
-  field-sizing: content;
   min-height: 50px;
   padding: 12px 20px;
   box-sizing: border-box;
@@ -313,17 +285,19 @@ input {
   border-radius: 4px;
   background-color: #f8f8f8;
   font-size: 16px;
-  resize: none;
 }
 input.contentuid {
-  min-width: 375px;
+  min-width: 390px;
+  width: auto;
+  font-family: inherit;
 }
 input.version {
+  /* Placeholder: no styles applied directly */
 }
 div.langline {
   display: flex;
   align-items: flex-start;
-  padding: 2px 2px;
+  padding: 2px;
 }
 div.display {
   max-width: 100%;
@@ -341,37 +315,42 @@ div.display {
   background-color: white;
   resize: vertical;
 }
-textarea#UUID, textarea#ContentUID {
-  vertical-align: middle;
-  field-sizing: content;
-  text-align: justify;
-  text-align-last: center;
+textarea#UUID,
+textarea#ContentUID {
+  display: block;
+  margin: 0 auto;
+  box-sizing: border-box;
+
   min-width: 400px;
   max-width: 400px;
-  min-height: 20px;
+  min-height: 60px;
+  max-height: 60px;
+
   padding: 16px;
-  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+
+  background-color: #f8f8f8;
+  font-size: 16px;
+  font-family: inherit;
+
+  text-align: justify;
+  text-align-last: center;
+  resize: none;
+}
+input#replace,
+input#search {
+  vertical-align: middle;
+  text-align: justify;
+  text-align-last: center;
+  width: 400px;
+  min-height: 20px;
+  padding: 6px;
   border: 2px solid #ccc;
   border-radius: 4px;
   background-color: #f8f8f8;
   font-size: 16px;
-  resize: none;
-}
-input#replace, input#search {
-    vertical-align: middle;
-    field-sizing: content;
-    text-align: justify;
-    text-align-last: center;
-    min-width: 400px;
-    max-width: 400px;
-    min-height: 20px;
-    padding: 6px;
-    box-sizing: border-box;
-    border: 2px solid #ccc;
-    border-radius: 4px;
-    background-color: #f8f8f8;
-    font-size: 16px;
-    resize: none;
+  box-sizing: border-box;
 }
 .dropbtn {
   background-color: rgba(80, 80, 80, 1);
@@ -379,6 +358,8 @@ input#replace, input#search {
   padding: 16px;
   font-size: 16px;
   border: none;
+  cursor: pointer;
+  border-radius: 4px;
 }
 .dropdown {
   position: relative;
@@ -389,57 +370,64 @@ input#replace, input#search {
   position: absolute;
   background-color: #f1f1f1;
   min-width: 160px;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
   z-index: 1;
+  border-radius: 4px;
+  overflow: hidden;
 }
 .dropdown-content a {
-  min-width: 400px;
-  text-align: justify;
-  text-align-last: center;
-  color: black;
+  display: block;
   padding: 12px 16px;
+  text-align: center;
+  color: black;
   text-decoration: none;
+  white-space: nowrap;
+}
+.dropdown-content a:hover {
+  background-color: #ddd;
+}
+.dropdown:hover .dropdown-content {
   display: block;
 }
-.dropdown-content a:hover {background-color: #ddd;}
-.dropdown:hover .dropdown-content {display: block;}
-.dropdown:hover .dropbtn {background-color: rgba(160, 160, 160, 1);}
-.nodrop {
-
+.dropdown:hover .dropbtn {
+  background-color: rgba(160, 160, 160, 1);
 }
-a.nodrop:link, a.nodrop:visited {
+.nodrop {
+  /* Placeholder: no styles applied directly */
+}
+a.nodrop:link,
+a.nodrop:visited {
   color: white;
   text-align: center;
   text-decoration: none;
   display: inline-block;
 }
 .rmDiv {
-  field-sizing: content;
   min-height: 50px;
   min-width: 50px;
   box-sizing: border-box;
   border: 2px solid #ccc;
   border-radius: 4px;
   background-color: rgba(80, 80, 80, 1);
-  resize: none;
-  color: #ffffff;
+  color: #fff;
   font-size: 1.5rem;
   font-weight: bold;
   cursor: pointer;
   line-height: 1;
   padding: 0;
+  text-align: center;
 }
 .rmDiv:hover {
-    color: rgba(0, 0, 0, 1);
+  color: rgba(0, 0, 0, 1);
+}
+.homeContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
 }
 .homeDiv {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-.homeText {
-  min-width: 1050px;
   max-width: 1050px;
+  width: 100%;
   text-align: center;
 }

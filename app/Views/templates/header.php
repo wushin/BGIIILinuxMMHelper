@@ -45,6 +45,10 @@ use App\Helpers\BG3DirectoryHelper;
             </div>
         </div>
 
+        <div class="heroe">
+            <h2><?= esc($title ?? '') ?></h2>
+        </div>
+
         <div class="right-group">
             <div class="dropdown">
                 <textarea id="UUID"></textarea>
@@ -57,8 +61,5 @@ use App\Helpers\BG3DirectoryHelper;
         </div>
     </div>
 
-    <div class="heroe">
-        <h2><?= esc($title ?? '') ?></h2>
-    </div>
 </header>
 
