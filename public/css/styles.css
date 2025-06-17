@@ -36,7 +36,7 @@ header .heroe {
   text-align: center;
   margin: 0 auto;
   max-width: 1100px;
-  padding: 6px 6px;
+  padding: 4px 6px;
 }
 header .heroe h1 {
   font-size: 2.5rem;
@@ -45,6 +45,8 @@ header .heroe h1 {
 header .heroe h2 {
   font-size: 22pt;
   font-weight: 300;
+  margin: 0.25rem 0;
+  line-height: 1.2;
 }
 section {
   margin: 0 auto;
@@ -94,17 +96,20 @@ section svg {
   stroke-width: 32px;
 }
 footer {
-  background-color: rgba(221, 72, 20, .8);
+  background-color: rgba(60, 60, 60, 1);
   text-align: center;
+  font-size: 0.75rem;
 }
 footer .environment {
   color: rgba(255, 255, 255, 1);
-  padding: 2rem 1.75rem;
+  padding: 0.4rem 0.75rem;
+  line-height: 1.1;
 }
 footer .copyrights {
   background-color: rgba(60, 60, 60, 1);
   color: rgba(200, 200, 200, 1);
-  padding: .25rem 1.75rem;
+  padding: 0.2rem 1rem;
+  font-size: 0.75rem;
 }
 @media (max-width: 629px) {
   header ul {
