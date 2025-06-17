@@ -6,6 +6,14 @@ use App\Helpers\FileHelper;
 
 class FormatHelper
 {
+    public static function wrapEditableContent(string $content, ?string $term = null): string
+    {
+        $wrapper = '<div contenteditable="true" class="display" id="data" name="data">';
+        $closer = '</div>';
+
+        return $wrapper . self::formatData($content, $term) . $closer;
+    }
+
     public static function formatForm(string $path, string $slug, string $key): string
     {
         $html = "<div id='fileName'>" . FileHelper::getFileName($path, $key) . 

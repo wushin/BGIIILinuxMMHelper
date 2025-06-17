@@ -6,6 +6,7 @@ use CodeIgniter\Model;
 
 use App\Helpers\XmlHelper;
 use App\Helpers\ArrayHelper;
+use App\Helpers\FormatHelper;
 use App\Helpers\FilePathHelper;
 use App\Helpers\TextParserHelper;
 
@@ -62,7 +63,7 @@ class BG3readwriteparse extends Model {
     foreach ($iterator as $info) {
        
       if ($info->isFile()) {
-        switch ($info->getExtension()) {
+        switch (strtolower($info->getExtension())) {
           case 'lsx':
             $this->parseLsx($info->getPathname());
             break;;
@@ -78,7 +79,6 @@ class BG3readwriteparse extends Model {
             $this->parseTxt($info->getPathname());
             break;;
           case 'png':
-          case 'DDS':
           case 'dds':
             $this->parseImg($info->getExtension(), $info->getPathname());
             break;;
@@ -125,7 +125,7 @@ class BG3readwriteparse extends Model {
   public function findNReplace($oldvalue,$newvalue) {
     $this->setDataBySearch($newvalue, $this->searchData($oldvalue));
     $langResults = $this->searchLang($oldvalue);
-    if(end($langResults[0]) == "contentuid" && preg_match("/\;/",$newvalue)) {
+    if (!empty($langResults) && end($langResults[0]) === "contentuid" && strpos($newvalue, ";") !== false) {
       $versionDup[] = $langResults[0];
       $versionDup[0][count($langResults[0]) - 1] = 'version';
       $contentuidInfo = explode(";",$newvalue);
@@ -144,22 +144,21 @@ class BG3readwriteparse extends Model {
         return $this->writeLang($file);
         break;;
       case "lsx":
-	$data = $this->writeXml($file);
-        return $wrapper.formatData($data,$term).$closer;
+        return FormatHelper::wrapEditableContent($this->writeXml($file), $term);
         break;;
       case "txt":
-        $data = $this->writeTxt($file);
-        return $wrapper.formatData($data,$term).$closer;
+        return FormatHelper::wrapEditableContent($this->writeTxt($file), $term);
         break;;
       case "khn":
-        $data = $this->writeKhn($file);
-        return $wrapper.formatData($data,$term).$closer;
+        return FormatHelper::wrapEditableContent($this->writeKhn($file), $term);
         break;;
       case "png":
        case "DDS":
        case "dds":
        return $this->displayImg($file);
        break;;
+     default:
+       return "<div class='display flash-red'>Unsupported file type: " . htmlspecialchars($file) . "</div>";
     }
   }
 
@@ -169,7 +168,7 @@ class BG3readwriteparse extends Model {
     } elseif (!is_array($data)) {
       $data = html_entity_decode($data, ENT_QUOTES | ENT_XML1);
     }
-    switch (substr($file, -3)) {
+    switch (strtolower(substr($file, -3))) {
       case "xml":
         $this->writeLang($file, $data, true);
         break;;
@@ -183,10 +182,8 @@ class BG3readwriteparse extends Model {
         $this->setDataTxt($file, $data);
         break;;
       case "png":
-      case "DDS":
       case "dds":
-        print_r($this->getData()[$file]);
-#        return $this->displayImg($file);
+        return $this->displayImg($file);
         break;;
     }
   }
@@ -210,7 +207,6 @@ class BG3readwriteparse extends Model {
   }
 
   public function writeXml($filepath, $data=false, $save=false) {
-    XmlHelper::init(null,null,null,false);
     if($data) {
       $xml_string = XmlHelper::createXML('save',XmlHelper::createArray($data)['save'])->saveXML();
     } else {
@@ -226,7 +222,6 @@ class BG3readwriteparse extends Model {
 
   public function writeLang($filepath, $data=false, $save=false) {
     if (FilePathHelper::testFile($filepath)) {
-      XmlHelper::init(null,null,null,false);
       if($data) {
         $xml_string = XmlHelper::createXML('contentList',$data)->saveXML();
       } else {

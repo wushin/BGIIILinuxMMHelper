@@ -120,7 +120,5 @@ class XmlHelper
             }
         }
     }
-    // Optional: alias for compatibility (safe no-op in your codebase)
-    public static function init(...$args): void {}
 }
 ?>
