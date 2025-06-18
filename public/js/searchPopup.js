@@ -69,8 +69,6 @@
     const results = document.getElementById('mongo-search-results');
     const pager = document.getElementById('mongo-pagination');
     const loading = document.getElementById('mongo-search-loading');
-    const dirFilters = document.getElementById('dir-filters');
-    const extFilters = document.getElementById('ext-filters');
     const searchBtn = document.getElementById('mongo-search-button');
     const toggleBtn = document.getElementById('toggle-filters');
 
@@ -81,6 +79,12 @@
     let selectedDirs = JSON.parse(localStorage.getItem('mongoDirs') || '[]');
     let selectedExts = JSON.parse(localStorage.getItem('mongoExts') || '[]');
     let searchHistory = JSON.parse(localStorage.getItem('mongoSearchHistory') || '[]');
+
+    function getSelectedFilters() {
+      const dirs = Array.from(document.querySelectorAll('#dir-filters input:checked')).map(cb => cb.value);
+      const exts = Array.from(document.querySelectorAll('#ext-filters input:checked')).map(cb => cb.value);
+      return { dirs, exts };
+    }
 
     const saveSearchTerm = (term) => {
       if (!term) return;
@@ -163,8 +167,15 @@
     const fetchResults = (term, page = 1) => {
       loading.style.visibility = 'visible';
       results.innerHTML = '';
+      const { dirs, exts } = getSelectedFilters();
+      const params = new URLSearchParams({
+        q: term,
+        page: page || 1
+      });
+      dirs.forEach(d => params.append('dirs[]', d));
+      exts.forEach(e => params.append('exts[]', e));
 
-      fetch(`/search/mongo?q=${encodeURIComponent(term)}&page=${page}`)
+      fetch(`/search/mongo?${params.toString()}`)
         .then(r => r.json())
         .then(json => renderResults(json))
         .catch(console.error)
