@@ -66,12 +66,21 @@ class MongoIndex extends BaseCommand
                     continue;
                 }
 
+                $relativePath = str_replace($gameDataPath . '/', '', $filePath);
+                $parts = explode('/', $relativePath);
+                $category = strtolower($parts[0] ?? 'unknown');
+                $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+                $raw = file_get_contents($filePath);
+
                 $data = [
-                    'filepath'   => $filePath,
-                    'filename'   => $fileInfo->getFilename(),
-                    'extension'  => $extension,
-                    'hash'       => $hash,
-                    'indexed_at' => date('c'),
+                    'filepath'   => $relativePath,
+                    'filename'   => basename($filePath),
+                    'extension'  => strtolower(pathinfo($filePath, PATHINFO_EXTENSION)),
+                    'category'   => $category,
+                    'hash'       => md5_file($filePath),
+                    'indexed_at' => date(DATE_ATOM),
+                    'raw'        => $raw,
                 ];
 
                 try {
