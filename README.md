@@ -22,3 +22,6 @@ This service is a companion to LSLIB and BGIIIMM.
 - `bash destroy.sh` script will stop and delete container
 - Happy Modding
 
+## License
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](./LICENSE/txt) file for details.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

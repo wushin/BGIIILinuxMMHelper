@@ -4,7 +4,7 @@
     <p>BG3 Mod Manager Linux Helper | <?= ENVIRONMENT ?> Environment</p>
   </div>
   <div class="copyrights">
-    <p>&copy; <?= date('Y') ?> Wushin. All rights reserved.</p>
+    <p>&#127279; <?= date('Y') ?> Wushin. <a href="https://www.gnu.org/licenses/gpl-3.0.txt" class="nodrop">GPL3</a></p>
   </div>
 </footer>
 <!-- SCRIPTS -->
