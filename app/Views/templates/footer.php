@@ -8,7 +8,8 @@
   </div>
 </footer>
 <!-- SCRIPTS -->
-<script type="text/javascript" src="<?php echo base_url().'js/bg3.js'; ?>"></script>
+<script type="text/javascript" src="/js/bg3.js"></script>
+<script type="text/javascript" src="/js/searchPopup.js"></script>
 <!-- -->
 </body>
 </html>

@@ -22,3 +22,16 @@ services:
         networks:
             - web-network
 
+    mongo:
+        image: mongo:latest
+        container_name: bg3mmh-mongo
+        restart: unless-stopped
+        ports:
+            - "27017:27017"
+        volumes:
+            - mongo_data:/data/db
+        networks:
+            - web-network
+
+volumes:
+  mongo_data:
