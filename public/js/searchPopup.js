@@ -36,10 +36,12 @@
           </div>
         </div>
 
-        <div id="mongo-pagination" class="mongo-pagination"></div>
-        <div id="mongo-search-results" class="mongo-results"></div>
-        <div id="mongo-search-loading" class="mongo-loading">
-          <div class="spinner"></div>
+        <div class="mongo-results-wrapper">
+          <div id="mongo-pagination" class="mongo-pagination"></div>
+          <div id="mongo-search-results" class="mongo-results"></div>
+          <div id="mongo-search-loading" class="mongo-loading" style="visibility: hidden;">
+            <div class="spinner"></div>
+          </div>
         </div>
       </div>
     `;
@@ -159,14 +161,14 @@
     }
 
     const fetchResults = (term, page = 1) => {
-      loading.style.display = 'block';
+      loading.style.visibility = 'visible';
       results.innerHTML = '';
 
       fetch(`/search/mongo?q=${encodeURIComponent(term)}&page=${page}`)
         .then(r => r.json())
         .then(json => renderResults(json))
         .catch(console.error)
-        .finally(() => loading.style.display = 'none');
+        .finally(() => loading.style.visibility = 'hidden');
     };
 
     function renderPagination(totalPages, currentPage) {
