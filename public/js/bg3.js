@@ -205,6 +205,17 @@ function clearInput(inputId) {
   if (input) input.value = '';
 }
 
+function filterDropdown(inputElement) {
+  const filter = inputElement.value.toLowerCase();
+  const container = inputElement.parentElement;
+  const links = container.querySelectorAll('a');
+
+  links.forEach(link => {
+    const text = link.textContent.toLowerCase();
+    link.style.display = text.includes(filter) ? '' : 'none';
+  });
+}
+
 document.getElementById('search')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();

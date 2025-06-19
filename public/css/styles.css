@@ -382,11 +382,13 @@ input#search {
   display: none;
   position: absolute;
   background-color: #f1f1f1;
-  min-width: 160px;
+  min-width: 300px;
+  max-height: 400px;
   box-shadow: 0 8px 16px rgba(0,0,0,0.2);
   z-index: 1;
   border-radius: 4px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .dropdown-content a {
   display: block;
@@ -404,6 +406,10 @@ input#search {
 }
 .dropdown:hover .dropbtn {
   background-color: rgba(160, 160, 160, 1);
+}
+#modFilter:focus {
+  outline: none;
+  background-color: #fff;
 }
 .nodrop {
   /* Placeholder: no styles applied directly */

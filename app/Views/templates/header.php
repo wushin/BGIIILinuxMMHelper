@@ -23,6 +23,7 @@ use App\Helpers\BG3DirectoryHelper;
         <div class="dropdown">
             <button class="dropbtn">My Mods</button>
             <div class="dropdown-content" id="dropdownMyMods">
+              <input type="text" id="MyModFilter" placeholder="Search mods..." onkeyup="filterDropdown(this)" style="width: 100%; box-sizing: border-box; padding: 8px; border: none; border-bottom: 1px solid #ccc;">
                 <?php foreach (BG3DirectoryHelper::getMyMods() as $MyMod): ?>
                     <a href="/mods/<?= esc(getenv('bg3LinuxHelper.MyMods')) ?>/<?= esc($MyMod) ?>"><?= esc($MyMod) ?></a>
                 <?php endforeach ?>
@@ -32,6 +33,7 @@ use App\Helpers\BG3DirectoryHelper;
         <div class="dropdown">
             <button class="dropbtn">All Mods</button>
             <div class="dropdown-content" id="dropdownAllMods">
+              <input type="text" id="ModFilter" placeholder="Search mods..." onkeyup="filterDropdown(this)" style="width: 100%; box-sizing: border-box; padding: 8px; border: none; border-bottom: 1px solid #ccc;">
                 <?php foreach (BG3DirectoryHelper::getAllMods() as $Mod): ?>
                     <a href="/mods/<?= esc(getenv('bg3LinuxHelper.AllMods')) ?>/<?= esc($Mod) ?>"><?= esc($Mod) ?></a>
                 <?php endforeach ?>
