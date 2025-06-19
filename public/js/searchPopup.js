@@ -241,6 +241,12 @@
         return lines.slice(start, end).join('\n');
       };
 
+      if (!json.results || json.results.length === 0) {
+        document.getElementById('mongo-pagination').innerHTML = '';
+        results.innerHTML = `<div class="no-results">No results found.</div>`;
+        return;
+      }
+
       const pages = Math.ceil(json.total / json.perPage) || 1;
       renderPagination(pages, json.page);
       results.innerHTML = json.results.map(doc => {
