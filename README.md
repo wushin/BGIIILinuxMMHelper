@@ -8,7 +8,7 @@ This tool is a companion to [LSLIB](https://github.com/Norbyte/lslib) and [BG3 M
 - 🔧 **UUID & Content UID Generator**
 - 🧽 **Browse & View Mod Files**
   - Supports `.xml`, `.lsx`, `.txt`, `.khn`, `.dds`, `.png`
-- 🖼️ **Automatic **``** → **``** Conversion**
+- 🖼️ **Automatic `.dds` → `.png` Conversion**
 - 🔍 **Full-Text Search** (MongoDB)
   - Search by filename, content, or UUIDs
   - Live filter by subdirectory and file type

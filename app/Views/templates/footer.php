@@ -8,6 +8,7 @@
   </div>
 </footer>
 <!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script type="text/javascript" src="/js/bg3.js"></script>
 <script type="text/javascript" src="/js/searchPopup.js"></script>
 <!-- -->

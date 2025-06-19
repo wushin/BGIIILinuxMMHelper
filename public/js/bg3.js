@@ -45,6 +45,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const displayHTML = sessionStorage.getItem('displayDiv');
   const searchHTML = sessionStorage.getItem('searchDiv');
 
+  const readmeTarget = document.getElementById('readme-container');
+  if (readmeTarget) {
+    fetch('/README.md')
+      .then(res => res.text())
+      .then(markdown => {
+        const html = marked.parse(markdown);
+        readmeTarget.innerHTML = html;
+      });
+  }
+
   if (displayHTML) {
     displayDiv.innerHTML = displayHTML;
 
@@ -213,3 +223,4 @@ window.addEventListener('beforeunload', () => {
   sessionStorage.setItem('displayDiv', document.getElementById('displayDiv')?.innerHTML || '');
   sessionStorage.setItem('searchDiv', document.getElementById('searchDiv')?.innerHTML || '');
 });
+

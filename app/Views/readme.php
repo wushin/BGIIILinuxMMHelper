@@ -1,1 +1,1 @@
-<main class="homeContainer"><div class="homeDiv"><div class="display"><?php echo $readme ?></div></div></main>
+<main class="homeContainer"><div class="markdown-body" id="readme-container"></div></main>

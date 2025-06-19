@@ -11,6 +11,7 @@ use App\Helpers\BG3DirectoryHelper;
     <link rel="shortcut icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/css/styles.css" type="text/css">
     <link rel="stylesheet" href="/css/searchPopup.css" type="text/css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css">
 </head>
 <body>
 <header>
