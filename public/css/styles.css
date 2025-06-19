@@ -361,6 +361,19 @@ input#search {
   cursor: pointer;
   border-radius: 4px;
 }
+.appSystem {
+  background-color: rgba(80, 80, 80, 1);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 2px;
+  margin-left: 2px;
+}
+.appSystem:hover {
+  background-color: rgba(160, 160, 160, 1);
+}
 .dropdown {
   position: relative;
   display: inline-block;

@@ -45,7 +45,7 @@ class FormatHelper
             } else {
                 $encodedPath = htmlspecialchars(FilePathHelper::getFileUrlPath($path, $relativePath));
                 $html .= '<li>' . htmlspecialchars($node) .
-                         ' <button id="viewFile" onclick="display(\'' . $encodedPath . '\')">Open</button></li>';
+                         ' <button id="viewFile" class="appSystem" onclick="display(\'' . $encodedPath . '\')">Open</button></li>';
             }
         }
 
@@ -55,7 +55,7 @@ class FormatHelper
 
     public static function wrapEditableContent(string $content, ?string $term = null): string
     {
-        $wrapper = '<div contenteditable="true" class="display" id="data" name="data">';
+        $wrapper = '<div contenteditable="true" spellcheck="false" class="display" id="data" name="data">';
         $closer = '</div>';
 
         return $wrapper . self::formatData($content, $term) . $closer;
@@ -64,10 +64,10 @@ class FormatHelper
     public static function formatForm(string $path, string $slug, string $key): string
     {
         $html = "<div id='fileName'>" . FilePathHelper::getFileName($path, $key) . 
-                " <button id=\"saveFile\" onclick=\"submitMainForm()\">Save</button>";
+                " <button id=\"saveFile\" class=\"appSystem\" onclick=\"submitMainForm()\">Save</button>";
 
         if (substr($key, -3) === "xml") {
-            $html .= "<button id=\"saveFile\" onclick=\"addRowToForm('mainForm')\">AddNewRow</button>";
+            $html .= "<button id=\"saveFile\" class=\"appSystem\" onclick=\"addRowToForm('mainForm')\">AddNewRow</button>";
         }
 
         $html .= "</div><form id=\"mainForm\">";
@@ -100,9 +100,9 @@ class FormatHelper
         $html = "";
         foreach ($lang['contentList']['content'] as $key => $item) {
             $html .= '<div class="langline" id="' . $key . '">';
-            $html .= '<input type="text" class="contentuid" name="data[content][' . $key . '][@attributes][contentuid]" value="' . htmlspecialchars($item['@attributes']['contentuid']) . '">';
-            $html .= '<input type="text" class="version" name="data[content][' . $key . '][@attributes][version]" value="' . htmlspecialchars($item['@attributes']['version']) . '">';
-            $html .= '<textarea name="data[content][' . $key . '][@value]">' . htmlspecialchars($item['@value']) . '</textarea>';
+            $html .= '<input type="text" spellcheck="false" class="contentuid" name="data[content][' . $key . '][@attributes][contentuid]" value="' . htmlspecialchars($item['@attributes']['contentuid']) . '">';
+            $html .= '<input type="text" spellcheck="false" class="version" name="data[content][' . $key . '][@attributes][version]" value="' . htmlspecialchars($item['@attributes']['version']) . '">';
+            $html .= '<textarea spellcheck="false" name="data[content][' . $key . '][@value]">' . htmlspecialchars($item['@value']) . '</textarea>';
             $html .= '<button class="rmDiv" onclick="removeDivById(\'' . $key . '\')">X</button>';
             $html .= "</div>";
        }

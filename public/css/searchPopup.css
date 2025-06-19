@@ -43,7 +43,7 @@
 }
 
 #mongo-popup-close {
-  background: #c00;
+  background-color: rgba(80, 80, 80, 1);
   color: #fff;
   border: none;
   padding: 8px 12px;

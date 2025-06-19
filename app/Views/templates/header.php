@@ -16,7 +16,7 @@ use App\Helpers\BG3DirectoryHelper;
 <header>
     <div class="menu">
         <div class="dropdown">
-            <button class="dropbtn"><a class="nodrop" href="/">Home</a></button>
+            <a class="nodrop" href="/"><button class="dropbtn">Home</button></a>
         </div>
 
         <div class="dropdown">
@@ -47,11 +47,11 @@ use App\Helpers\BG3DirectoryHelper;
 
         <div class="right-group">
             <div class="dropdown">
-                <textarea id="UUID"></textarea>
+                <textarea spellcheck="false" id="UUID"></textarea>
                 <button class="dropbtn" id="fetchUUID">New UUID</button>
             </div>
             <div class="dropdown">
-                <textarea id="ContentUID"></textarea>
+                <textarea spellcheck="false" id="ContentUID"></textarea>
                 <button class="dropbtn" id="fetchContentUID">New ContentUID</button>
             </div>
         </div>

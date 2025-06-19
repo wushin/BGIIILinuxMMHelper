@@ -155,8 +155,6 @@ class BG3readwriteparse extends Model {
   }
 
   public function draw($file, $term=null) {
-    $wrapper = '<div contenteditable="true" class="display" id="data" name="data">';
-    $closer = '</div>';
     switch (substr($file, -3)) {
       case "xml":
         return $this->writeLang($file);

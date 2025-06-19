@@ -178,7 +178,7 @@ function addRowToForm(formId) {
 
   div.innerHTML = `
     <input type="text" name="data[content][${inputValue}][@attributes][contentuid]" placeholder="contentuid" class="contentuid">
-    <input type="text" name="data[content][${inputValue}][@attributes][version]" placeholder="1" class="version">
+    <input type="text" name="data[content][${inputValue}][@attributes][version]" placeholder="1" class="version" style="width: 53px;">
     <textarea name="data[content][${inputValue}][@value]" placeholder="Text to Display"></textarea>
     <button class="rmDiv" onclick="removeDivById('${inputValue}')">X</button>
   `;

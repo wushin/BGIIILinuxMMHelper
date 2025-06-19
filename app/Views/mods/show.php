@@ -4,16 +4,16 @@
   <div class="column left">
     <div class="form-row">
       <label for="search">Search:</label>
-      <input id="search" />
-      <button onclick="search('search')">Search</button>
-      <button onclick="clearInput('search')">Clear</button>
+      <input spellcheck="false" id="search" />
+      <button class="appSystem" onclick="search('search')">Search</button>
+      <button class="appSystem" onclick="clearInput('search')">Clear</button>
     </div>
 
     <div class="form-row">
       <label for="replace">Replace:</label>
-      <input id="replace" />
-      <button onclick="replace('search','replace')">Replace</button>
-      <button onclick="clearInput('replace')">Clear</button>
+      <input spellcheck="false" id="replace" />
+      <button class="appSystem" onclick="replace('search','replace')">Replace</button>
+      <button class="appSystem" onclick="clearInput('replace')">Clear</button>
     </div>
 
     <div class="file-list">
