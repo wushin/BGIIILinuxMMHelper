@@ -141,7 +141,16 @@ class BG3readwriteparse extends Model {
   }
 
   public function findNReplace($oldvalue,$newvalue) {
-    $this->setDataBySearch($newvalue, $this->searchData($oldvalue));
+    $searchResults = $this->searchData($oldvalue);
+    if (!empty($searchResults) && end($searchResults[0]) === "handle" && strpos($newvalue, ";") !== false) {
+      $searchDup[] = $searchResults[0];
+      $searchDup[0][count($searchResults[0]) - 1] = 'version';
+      $handleInfo = explode(";",$newvalue);
+      $this->setDataBySearch($handleInfo[0], $searchResults);
+      $this->setDataBySearch($handleInfo[1], $searchDup);
+    } else {
+      $this->setDataBySearch($newvalue, $this->searchData($oldvalue));
+    }
     $langResults = $this->searchLang($oldvalue);
     if (!empty($langResults) && end($langResults[0]) === "contentuid" && strpos($newvalue, ";") !== false) {
       $versionDup[] = $langResults[0];
