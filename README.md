@@ -1,29 +1,74 @@
 # BGIII Mod Manager Linux Helper
 
-Small web service that aids in BG3 development in Linux.
-This service is a companion to LSLIB and BGIIIMM.
+A lightweight web service that assists with Baldur's Gate 3 mod development on Linux.\
+This tool is a companion to [LSLIB](https://github.com/Norbyte/lslib) and [BG3 Mod Manager (BGIIIMM)](https://github.com/LaughingLeader/BG3ModManager).
 
-## Features
-- contentuid & UUID generation
-- Easily Browse Mods and view most files
-- Automatic DDS conversion into png for viewing
-- Search function to return files with key
-- Replace function to replace files found with new key
-- Edit and save most files
-- Edit the text files locally and refresh to see changes in service and vice versa
+## ✨ Features
 
-## How to Use
-- Install and Set up [Docker](https://docs.docker.com/engine/install/)
-- Edit the docker-compose.yml.example to reflect where you directories are.
-- Save the edited file as docker-compose.yml
-- run `bash set-up.sh` or `docker-compose up -d --build --remove-orphans`
--- docker-composer requires sudo on debian
-- After build complstes run `docker exec -it bg3mmh php ./spark mongoindex:scan --rebuild` to index GameData
--- docker requires sudo on debian
-- Naviagate to http://localhost:8080/ in a browser
-- `bash destroy.sh` script will stop and delete container
-- Happy Modding
+- 🔧 **UUID & Content UID Generator**
+- 🧽 **Browse & View Mod Files**
+  - Supports `.xml`, `.lsx`, `.txt`, `.khn`, `.dds`, `.png`
+- 🖼️ **Automatic **``** → **``** Conversion**
+- 🔍 **Full-Text Search** (MongoDB)
+  - Search by filename, content, or UUIDs
+  - Live filter by subdirectory and file type
+  - Search history dropdown and pagination
+- ✏️ **Edit & Save Support** for most files
+  - In-browser editor with content highlighting
+  - Syncs with local changes automatically on refresh
+- ↩️ **Replace Utility** to batch-replace keys/values in files
+- 🐳 Fully Dockerized for easy setup and isolation
 
-## License
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](./LICENSE/txt) file for details.
+## 🚀 Getting Started
+
+1. **Install **[**Docker**](https://docs.docker.com/engine/install/)
+
+2. Copy and edit the `docker-compose.yml.example`:
+
+   ```bash
+   cp docker-compose.yml.example docker-compose.yml
+   ```
+
+   Set your local mod paths in the new file.
+
+3. Build and launch the containers:
+
+   ```bash
+   bash set-up.sh
+   ```
+
+   Or manually:
+
+   ```bash
+   sudo docker-compose up -d --build --remove-orphans
+   ```
+
+4. Index your game data for search:
+
+   ```bash
+   sudo docker exec -it bg3mmh php ./spark mongoindex:scan --rebuild
+   ```
+
+5. Open your browser to:\
+   👉 `http://localhost:8080/`
+
+6. To stop and clean up:
+
+   ```bash
+   bash destroy.sh
+   ```
+
+## 🧪 Notes
+
+- Docker may require `sudo` on Debian-based systems.
+- Local edits sync seamlessly with the browser-based editor.
+- All search results are stored in MongoDB and updated on reindex.
+
+---
+
+## 📜 License
+
+This project is licensed under the **GNU General Public License v3.0**.\
+See the full [LICENSE](./LICENSE.txt) for details.
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
