@@ -40,7 +40,7 @@ class SearchMongo extends ResourceController
         $page  = max(1, (int) $this->request->getGet('page'));
         $per   = 5;
         $dirs  = $this->request->getGet('dirs');
-        $types = $this->request->getGet('types');
+        $exts = $this->request->getGet('exts');
 
         $filter = [];
 
@@ -48,8 +48,8 @@ class SearchMongo extends ResourceController
             $filter['category'] = ['$in' => $dirs];
         }
 
-        if ($types && is_array($types)) {
-            $filter['extension'] = ['$in' => $types];
+        if ($exts && is_array($exts)) {
+            $filter['extension'] = ['$in' => $exts];
         }
 
         if ($query !== '') {
@@ -58,7 +58,8 @@ class SearchMongo extends ResourceController
             ];
         }
 
-        log_message('info', "Mongo search request: '{$query}' (page {$page})");
+        log_message('info', "Mongo search request: '{$query}' (page {$page})". print_r($filter, true));
+
 
         try {
             $client      = new MongoClient('mongodb://bg3mmh-mongo:27017');
