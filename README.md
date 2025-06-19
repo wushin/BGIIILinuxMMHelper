@@ -18,6 +18,8 @@ This service is a companion to LSLIB and BGIIIMM.
 - Save the edited file as docker-compose.yml
 - run `bash set-up.sh` or `docker-compose up -d --build --remove-orphans`
 -- docker-composer requires sudo on debian
+- After build complstes run `docker exec -it bg3mmh php ./spark mongoindex:scan --rebuild` to index GameData
+-- docker requires sudo on debian
 - Naviagate to http://localhost:8080/ in a browser
 - `bash destroy.sh` script will stop and delete container
 - Happy Modding

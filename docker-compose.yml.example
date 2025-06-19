@@ -10,14 +10,14 @@ services:
             dockerfile: Dockerfile
             network: host
         container_name: bg3mmh
-        command: /bin/sh -c "cd /var/www/ && php spark serve --host 0.0.0.0"
+        command: /bin/sh -c "cd /var/www/html/ && php spark serve --host 0.0.0.0"
         ports:
             - '8080:8080'
         volumes:
             - ./:/var/www/
-            - <ABS PATH TO UNPACKED MODS>:/var/www/public/AllMods/
-            - <ABS PATH TO MODS TO DEVELOP>:/var/www/public/MyMods/
-            - <ABS PATH TO UNPACKED GAME DATA>:/var/www/public/GameData/
+            - <ABS PATH TO UNPACKED MODS>:/var/www/html/public/AllMods/
+            - <ABS PATH TO MODS TO DEVELOP>:/var/www/html/public/MyMods/
+            - <ABS PATH TO UNPACKED GAME DATA>:/var/www/html/public/GameData/
         restart: "no"
         networks:
             - web-network
