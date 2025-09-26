@@ -18,6 +18,7 @@ services:
             - <ABS PATH TO UNPACKED MODS>:/var/www/html/public/AllMods/
             - <ABS PATH TO MODS TO DEVELOP>:/var/www/html/public/MyMods/
             - <ABS PATH TO UNPACKED GAME DATA>:/var/www/html/public/GameData/
+            - <ABS PATH TO ICON PACKS>:/var/www/html/public/Icons/
         restart: "no"
         networks:
             - web-network

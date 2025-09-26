@@ -20,4 +20,5 @@ RUN sed -i 's/bookworm/testing/'g /etc/apt/sources.list.d/debian.sources \
    && cd /tmp && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && php /tmp/composer-setup.php --install-dir=/usr/bin && php -r "unlink('composer-setup.php');" \
    && mv /usr/bin/composer.phar /usr/bin/composer
 
+COPY ./php.ini /usr/local/etc/php/php.ini
 RUN git config --global --add safe.directory /var/www/html

@@ -27,8 +27,11 @@ use App\Helpers\ArrayHelper;
 use App\Helpers\FormatHelper;
 use App\Helpers\FilePathHelper;
 use App\Helpers\TextParserHelper;
+use App\Helpers\DialogHelper;
 
 class BG3readwriteparse extends Model {
+
+  protected DialogHelper $dialog;
 
   protected $_Lang = array();
 
@@ -169,6 +172,7 @@ class BG3readwriteparse extends Model {
         return $this->writeLang($file);
         break;;
       case "lsx":
+        return $this->lsxBothJson($file, $this->_Lang);
         return FormatHelper::wrapEditableContent($this->writeXml($file), $term);
         break;;
       case "txt":
@@ -279,5 +283,58 @@ class BG3readwriteparse extends Model {
     }
     return $data;
   }
+
+    /**
+     * Return the PRIMARY JSON (structure-preserving, TranslatedString text in attrs['text'])
+     * by reading the LSX and english XML files from disk.
+     */
+    public function lsxPrimaryJson(string $lsxPath, string $englishPath): string
+    {
+        $lsxXml     = file_get_contents($lsxPath);
+        $englishXml = file_get_contents($englishPath);
+        return $this->dialog->primaryJson($lsxXml, $englishXml);
+    }
+
+    /**
+     * Return the SECONDARY JSON {roots, graph} from the LSX file.
+     */
+    public function lsxSecondaryJson(string $lsxPath): string
+    {
+        $lsxXml = file_get_contents($lsxPath);
+        return $this->dialog->secondaryJson($lsxXml);
+    }
+
+    /**
+     * Return a single JSON object string:
+     * { "primary": {..}, "secondary": { roots: [...], graph: {...} } }
+     */
+    public function lsxBothJson(string $lsxPath, string $englishPath): string
+    {
+        $lsxXml     = file_get_contents($lsxPath);
+        $englishXml = file_get_contents($englishPath);
+        return $this->dialog->bothJson($lsxXml, $englishXml);
+    }
+
+    /**
+     * Build LSX (XML string) from a PRIMARY JSON string.
+     * This does not touch the model's stored data; it’s a pure transform.
+     */
+    public function lsxRebuildFromPrimaryJson(string $primaryJson): string
+    {
+        return $this->dialog->buildLsxFromPrimaryJson($primaryJson);
+    }
+
+    /**
+     * (Optional) In-memory variants if you already have the XML strings:
+     */
+    public function lsxPrimaryJsonFromStrings(string $lsxXml, string $englishXml): string
+    {
+        return $this->dialog->primaryJson($lsxXml, $englishXml);
+    }
+
+    public function lsxSecondaryJsonFromString(string $lsxXml): string
+    {
+        return $this->dialog->secondaryJson($lsxXml);
+    }
 }
 ?>
