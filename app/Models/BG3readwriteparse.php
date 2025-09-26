@@ -172,7 +172,6 @@ class BG3readwriteparse extends Model {
         return $this->writeLang($file);
         break;;
       case "lsx":
-        return $this->lsxBothJson($file, $this->_Lang);
         return FormatHelper::wrapEditableContent($this->writeXml($file), $term);
         break;;
       case "txt":

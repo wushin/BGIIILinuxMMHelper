@@ -19,6 +19,9 @@ use App\Helpers\BG3DirectoryHelper;
         <div class="dropdown">
             <a class="nodrop" href="/"><button class="dropbtn">Home</button></a>
         </div>
+        <div class="dropdown">
+            <a class="nodrop" href="/settings/"><button class="dropbtn">Settings</button></a>
+        </div>
 
         <div class="dropdown">
             <button class="dropbtn">My Mods</button>
