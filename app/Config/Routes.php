@@ -21,6 +21,9 @@ $routes->get('replace/(:segment)/(:segment)/(:segment)/(:any)', [Mods::class, 'r
 $routes->get('uuidcontentuidgen', [UUIDContentUIDGen::class, 'index']);
 $routes->get('uuidcontentuidgen/(:any)', [UUIDContentUIDGen::class, 'index']);
 
+$routes->get ('mods/localizations/manifest', 'ModsLocalization::manifest');
+$routes->post('mods/localizations/parse',    'ModsLocalization::parse');
+
 $routes->get ('settings',      'Settings::index');
 $routes->post('settings/save', 'Settings::save');
 

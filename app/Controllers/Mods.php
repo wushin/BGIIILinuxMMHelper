@@ -21,8 +21,6 @@
 namespace App\Controllers;
 
 use App\Models\BG3readwriteparse;
-use CodeIgniter\Files\File;
-use CodeIgniter\Files\FileCollection;
 use App\Helpers\FormatHelper;
 use App\Helpers\FilePathHelper;
 
@@ -31,8 +29,10 @@ class Mods extends BaseController
     public function index(?string $path, ?string $slug = null, ?string $file = null)
     {
         $data['title'] = $slug;
-        $data['bginfo']['path'] = FilePathHelper::getUrlPath($path,$slug);
+        $data['bginfo']['path'] = FilePathHelper::getUrlPath($path, $slug);
+        // Show directories & files; tree rendering is unchanged
         $data['Mods'] = FormatHelper::directoryTreeToHtml($path, FilePathHelper::getUrlPath($path, $slug), true);
+
         return view('templates/header', $data)
             . view('mods/show')
             . view('templates/footer');
@@ -40,42 +40,70 @@ class Mods extends BaseController
 
     public function display($path, $slug, $file)
     {
-        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path,$slug));
-        if (!empty($file) && !str_ends_with($file, 'loca') && !str_ends_with($file, 'lsf'))
-        {
-            $filename = FilePathHelper::getAbsFileName($path,$slug,$file);
-            if (strtolower(substr($file, -3)) != "xml") {
-               return FormatHelper::formatForm($path,$slug,$filename).$bgdata->draw($filename)." </form>";
-            } else {
-               return FormatHelper::formatForm($path,$slug,$filename).FormatHelper::langToForm($bgdata->getLang()[$filename])." </form>";
-            }
-        } else {
+        $absModPath = FilePathHelper::getAbsPath($path, $slug);
+        $bgdata     = new BG3readwriteparse($absModPath);
+
+        if (empty($file) || str_ends_with($file, 'loca') || str_ends_with($file, 'lsf')) {
             return "<div id='fileName' class='flash-red'>".$file." is unsupported or empty file type</div>";
         }
+
+        $filename = FilePathHelper::getAbsFileName($path, $slug, $file);
+        $ext3     = strtolower(substr($file, -3));
+
+        // Images / txt / khn / lsx handled as before
+        if ($ext3 !== 'xml') {
+            return FormatHelper::formatForm($path, $slug, $filename)
+                 . $bgdata->draw($filename)
+                 . " </form>";
+        }
+
+        // XML: with new localization scanning, mods can have 1..N localization XMLs.
+        // Only render as language form if this XML was detected/parsed as localization.
+        $langMap = $bgdata->getLang();
+
+        if (isset($langMap[$filename])) {
+            return FormatHelper::formatForm($path, $slug, $filename)
+                 . FormatHelper::langToForm($langMap[$filename])
+                 . " </form>";
+        }
+
+        // Non-localization XMLs are not editable in the lang form; show a friendly notice.
+        return "<div id='fileName' class='flash-red'>Not a localization/TranslatedString XML: "
+             . htmlspecialchars(FilePathHelper::getFileName($path, $filename))
+             . "</div>";
     }
 
     public function search($path, $slug, $term)
     {
-        $files = array();
-        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path,$slug));
+        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path, $slug));
+
+        // Build set of files that matched
+        $files = [];
         foreach ($bgdata->searchData($term) as $result) {
-          $files[$result[0]] = true;
+            // $result[0] is the file path per ArrayHelper::recursiveSearchKeyMap contract
+            $files[$result[0]] = true;
         }
+
         $htmlout = "";
-        foreach ($files as $key => $value) {
-          $htmlout .= "<div id='fileName'>".FilePathHelper::getFileName($path,$key)." <button id=\"viewFile\" class=\"appSystem\" onclick=\"display('".FilePathHelper::getFileUrlPath($path,$key)."')\">Open</button></div>".$bgdata->draw($key,$term);
+        foreach ($files as $filePath => $_) {
+            $htmlout .= "<div id='fileName'>"
+                     .  FilePathHelper::getFileName($path, $filePath)
+                     .  " <button id=\"viewFile\" class=\"appSystem\" onclick=\"display('"
+                     .  FilePathHelper::getFileUrlPath($path, $filePath)
+                     .  "')\">Open</button></div>"
+                     .  $bgdata->draw($filePath, $term);
         }
-        if (strlen($htmlout) == 0) {
-          $htmlout = "<div id='fileName'>No Results Found!</div>";
+
+        if ($htmlout === "") {
+            $htmlout = "<div id='fileName'>No Results Found!</div>";
         }
-        $data['results'] = $htmlout;
-        return view('mods/search', $data);
+
+        return view('mods/search', ['results' => $htmlout]);
     }
 
     public function replace($path, $slug, $searchValue, $replaceValue)
     {
-        $files = array();
-        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path,$slug));
+        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path, $slug));
         $bgdata->findNReplace($searchValue, $replaceValue);
         return true;
     }
@@ -86,7 +114,9 @@ class Mods extends BaseController
         $path = $this->request->getPost('path');
         $slug = $this->request->getPost('slug');
         $data = $this->request->getPost('data');
-        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path,$slug));
+
+        $bgdata = new BG3readwriteparse(FilePathHelper::getAbsPath($path, $slug));
         $bgdata->saveFile($file, $data);
     }
 }
+

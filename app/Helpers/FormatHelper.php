@@ -25,25 +25,36 @@ use App\Helpers\FilePathHelper;
 class FormatHelper
 {
 
-    public static function directoryTreeToHtml(string $path, string $dir, bool $isRoot = true): string
+    protected static array $ignore = ['.', '..', '*.lsf'];
+
+    public static function directoryTreeToHtml(string $path, string $dir, bool $isRoot = true, ?array $ignoreRules = null): string
     {
-        $contents = scandir($dir);
+        // Use provided rules or fall back to a static default if present, else basic dot entries
+        if ($ignoreRules === null) {
+            $ignoreRules = property_exists(static::class, 'ignore') ? (static::$ignore ?? ['.', '..']) : ['.', '..'];
+        }
+
+        $contents = scandir($dir, SCANDIR_SORT_ASCENDING);
         if (!$contents) return '';
 
         $html = $isRoot ? '<ul>' : '<ul class="nested">';
 
         foreach ($contents as $node) {
-            if ($node === '.' || $node === '..') continue;
+            $fullPath     = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $node;
+            $relativePath = preg_replace('#^' . preg_quote(rtrim($path, '/\\') . DIRECTORY_SEPARATOR, '#') . '#', '', $fullPath);
 
-            $fullPath = $dir . '/' . $node;
-            $relativePath = preg_replace('#^' . preg_quote($path . '/', '#') . '#', '', $fullPath);
+            // Apply ignore rules to both basename and relative path
+            if (self::isIgnoredNode($node, $relativePath, $ignoreRules)) {
+                continue;
+            }
 
             if (is_dir($fullPath)) {
+                // If the directory itself matches ignore, it was already skipped above.
                 $html .= '<li><span class="caret">' . htmlspecialchars($node) . '</span>';
-                $html .= self::directoryTreeToHtml($path, $fullPath, false);
+                $html .= self::directoryTreeToHtml($path, $fullPath, false, $ignoreRules);
                 $html .= '</li>';
             } else {
-                $encodedPath = htmlspecialchars(FilePathHelper::getFileUrlPath($path, $relativePath));
+                $encodedPath = htmlspecialchars(\App\Helpers\FilePathHelper::getFileUrlPath($path, $relativePath));
                 $html .= '<li>' . htmlspecialchars($node) .
                          ' <button id="viewFile" class="appSystem" onclick="display(\'' . $encodedPath . '\')">Open</button></li>';
             }
@@ -52,6 +63,61 @@ class FormatHelper
         $html .= '</ul>';
         return $html;
     }
+
+    private static function isIgnoredNode(string $name, string $relPath, array $rules): bool
+    {
+        foreach ($rules as $rule) {
+            $rule = (string)$rule;
+            if ($rule === '') continue;
+
+            if (strcasecmp($rule, $name) === 0 || strcasecmp($rule, $relPath) === 0) {
+                return true;
+            }
+
+            $first = $rule[0];
+            $last  = substr($rule, -1);
+            if ($first === $last && in_array($first, ['/', '~', '#'], true)) {
+                if (@preg_match($rule, $name) || @preg_match($rule, $relPath)) {
+                    return true;
+                }
+                continue;
+            }
+
+            $rx = self::globToRegex($rule);
+            if (preg_match($rx, $name) || preg_match($rx, $relPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function globToRegex(string $glob): string
+    {
+        if ($glob !== '' && $glob[0] === '.') {
+            $glob = '*' . $glob;
+        }
+
+        $quoted = preg_quote($glob, '~');
+
+        $quoted = preg_replace_callback('/(?<!\\\\)\\[(.*?)]/u', function ($m) {
+            $inner = $m[1];
+            // handle leading ! -> ^
+            if ($inner !== '' && $inner[0] === '!') {
+                $inner = '^' . substr($inner, 1);
+            }
+            return '[' . $inner . ']';
+        }, $quoted) ?? $quoted;
+
+        $quoted = strtr($quoted, [
+            '\*' => '.*',
+            '\?' => '.',
+        ]);
+
+        $quoted = str_replace('\/', '[/\\\\]', $quoted);
+
+        return '~^' . $quoted . '$~i';
+    }
+
 
     public static function wrapEditableContent(string $content, ?string $term = null): string
     {

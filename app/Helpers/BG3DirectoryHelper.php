@@ -26,7 +26,7 @@ class BG3DirectoryHelper
 
     public static function getMyMods(): array
     {
-        return self::scanDirectory(getenv('bg3LinuxHelper.MyMods'));
+        return self::scanDirectory(getenv('bg3LinuxHelper.MyMods'),true);
     }
 
     public static function getAllMods(): array
@@ -48,9 +48,22 @@ class BG3DirectoryHelper
         ];
     }
 
-    protected static function scanDirectory(string $path): array
+    protected static function scanDirectory(string $path, bool $dirsOnly = false): array
     {
-        return is_dir($path) ? array_values(array_diff(scandir($path), self::$ignore)) : [];
+        if (!is_dir($path)) {
+            return [];
+        }
+
+        $path    = rtrim($path, DIRECTORY_SEPARATOR);
+        $entries = array_values(array_diff(scandir($path), self::$ignore)); // keeps scandir order
+
+        if ($dirsOnly) {
+            $entries = array_values(array_filter($entries, function (string $name) use ($path) {
+                return is_dir($path . DIRECTORY_SEPARATOR . $name);
+            }));
+        }
+
+        return $entries;
     }
 }
 ?>

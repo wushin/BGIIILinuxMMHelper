@@ -21,134 +21,167 @@
 namespace App\Helpers;
 
 /**
- * DialogHelper (CI4)
+ * DialogHelper (CI4) — Array-first, uses XmlHelper for all XML parsing/building.
  *
- * Public JSON-only API:
- *  - primaryJson(string $lsxXml, string $englishXml): string
- *  - secondaryJson(string $lsxXml): string
- *  - bothJson(string $lsxXml, string $englishXml): string
- *  - buildLsxFromPrimaryJson(string $primaryJson): string   // returns LSX XML text
+ * Primary array shape (same as before):
+ *   [
+ *     'name'     => '<tag>',
+ *     'attrs'    => ['id'=>'...', 'type'=>'...', ...],
+ *     'children' => [ <childNode> ... ]
+ *   ]
  *
- * Notes:
- *  - Primary JSON mirrors LSX structure:
- *      { "name": "<tag>", "attrs": { ... }, "children": [ ... ] }
- *    and resolves <attribute type="TranslatedString" handle="..."> into attrs["text"].
- *  - Secondary JSON:
- *      { "roots": [...], "graph": { "<node-uuid>": ["<child-uuid>", ...], ... } }
- *    where graph includes ONLY <node id="node"> entries; children are the UUIDs under:
- *      <node id="children">...<node id="child"><attribute id="UUID" .../></node>
- *    Nodes with no children are kept with an empty array.
+ * Secondary array shape:
+ *   [
+ *     'roots' => [ '<uuid>', ... ],
+ *     'graph' => [ '<node-uuid>' => ['<child-uuid>', ...], ... ]
+ *   ]
+ *
+ * Public API (all return arrays except builders to XML):
+ *   - primaryDialogMulti(string $lsxXml, array $englishXmlStrings, bool $laterWins=true): array
+ *   - bothDialogMulti(string $lsxXml, array $englishXmlStrings, bool $laterWins=true): array
+ *   - primaryDialogFromHandles(string $lsxXml, array $handleMap): array
+ *   - bothDialogFromHandles(string $lsxXml, array $handleMap): array
+ *   - primaryDialog(string $lsxXml, string $englishXml): array                 // single english.xml
+ *   - bothDialog(string $lsxXml, string $englishXml): array                    // single english.xml
+ *   - secondaryDialog(string $lsxXml): array
+ *   - buildLsxFromPrimaryArray(array $primary): string                       // ARRAY → LSX XML
+ *   - buildLsxFromPrimaryDialog(string $primaryDialog): string                   // JSON  → LSX XML (convenience)
  */
 class DialogHelper
 {
-    /* ===================== Public API ===================== */
+    /* ===================== Public API (multi-XML & handles) ===================== */
 
-    /** Primary JSON string from LSX + english XML strings. */
-    public function primaryJson(string $lsxXml, string $englishXml): string
+    /** Primary ARRAY from LSX + MANY english.xml-like strings. */
+    public function primaryDialogMulti(string $lsxXml, array $englishXmlStrings, bool $laterWins = true): array
     {
-        $lsx     = $this->loadXmlString($lsxXml);
-        $english = $this->loadXmlString($englishXml);
-        $handles = $this->buildHandleMapFromXml($english);
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);                   // via XmlHelper
+        $handles             = $this->buildHandleMapFromEnglishStrings($englishXmlStrings, $laterWins);
 
-        $primary = $this->elementToArrayFromXml($lsx, $handles);
-        $json = json_encode($primary, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            throw new \RuntimeException("JSON encode failed: " . json_last_error_msg());
-        }
-        return $json;
+        return $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handles);
     }
 
-    /** Secondary JSON string ({roots, graph}) from LSX XML string. */
-    public function secondaryJson(string $lsxXml): string
+    /** Both arrays (primary + secondary) using MANY english.xml-like strings. */
+    public function bothDialogMulti(string $lsxXml, array $englishXmlStrings, bool $laterWins = true): array
     {
-        $lsx = $this->loadXmlString($lsxXml);
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        $handles             = $this->buildHandleMapFromEnglishStrings($englishXmlStrings, $laterWins);
 
-        $payload = [
-            'roots' => $this->collectRootUuidsFromXml($lsx),
-            'graph' => $this->buildGraphNodesOnlyFromXml($lsx),
+        return [
+            'primary'   => $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handles),
+            'secondary' => $this->secondaryFromXmlHelperTree($lsxArr),
         ];
-
-        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
-            throw new \RuntimeException("JSON encode failed: " . json_last_error_msg());
-        }
-        return $json;
     }
 
-    /** One-shot: returns a JSON object string with both primary & secondary. */
-    public function bothJson(string $lsxXml, string $englishXml): string
+    /** Primary ARRAY using a prebuilt handle map (handle => text). */
+    public function primaryDialogFromHandles(string $lsxXml, array $handleMap): array
     {
-        $lsx     = $this->loadXmlString($lsxXml);
-        $english = $this->loadXmlString($englishXml);
-        $handles = $this->buildHandleMapFromXml($english);
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        return $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handleMap);
+    }
 
-        $primaryArr = $this->elementToArrayFromXml($lsx, $handles);
-        $secondaryArr = [
-            'roots' => $this->collectRootUuidsFromXml($lsx),
-            'graph' => $this->buildGraphNodesOnlyFromXml($lsx),
+    /** Both ARRAYS using a prebuilt handle map. */
+    public function bothDialogFromHandles(string $lsxXml, array $handleMap): array
+    {
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        return [
+            'primary'   => $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handleMap),
+            'secondary' => $this->secondaryFromXmlHelperTree($lsxArr),
         ];
-
-        $json = json_encode(
-            ['primary' => $primaryArr, 'secondary' => $secondaryArr],
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
-        );
-        if ($json === false) {
-            throw new \RuntimeException("JSON encode failed: " . json_last_error_msg());
-        }
-        return $json;
     }
 
-    /**
-     * Build LSX (XML string) from a primary JSON string.
-     * (JSON in → XML out; this one intentionally returns XML, not JSON.)
-     */
-    public function buildLsxFromPrimaryJson(string $primaryJson): string
-    {
-        $data = json_decode($primaryJson, true);
-        if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-            throw new \RuntimeException("Invalid JSON: " . json_last_error_msg());
-        }
-        if (!isset($data['name'])) {
-            throw new \InvalidArgumentException("Primary JSON root missing 'name'.");
-        }
+    /* ===================== Back-compat (single english.xml) ===================== */
 
-        $xml = '<?xml version="1.0" encoding="utf-8"?>' . "\n";
-        $xml .= $this->renderElement($data, 0);
+    /** Primary ARRAY from LSX + a single english.xml string. */
+    public function primaryDialog(string $lsxXml, string $englishXml): array
+    {
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        $handles             = $this->buildHandleMapFromEnglishStrings([$englishXml], true);
+        return $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handles);
+    }
+
+    /** Both ARRAYS (primary + secondary) from a single english.xml string. */
+    public function bothDialog(string $lsxXml, string $englishXml): array
+    {
+        [$rootName, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        $handles             = $this->buildHandleMapFromEnglishStrings([$englishXml], true);
+
+        return [
+            'primary'   => $this->xmlHelperTreeToPrimary($rootName, $lsxArr, $handles),
+            'secondary' => $this->secondaryFromXmlHelperTree($lsxArr),
+        ];
+    }
+
+    /** Secondary ARRAY ({roots, graph}) from LSX XML string (no localization needed). */
+    public function secondaryDialog(string $lsxXml): array
+    {
+        [, $lsxArr] = $this->loadXmlAsArr($lsxXml);
+        return $this->secondaryFromXmlHelperTree($lsxArr);
+    }
+
+    /* ===================== Builders (ARRAY → XML) ===================== */
+
+    /** ARRAY (primary shape) → LSX XML. */
+    public function buildLsxFromPrimaryArray(array $primary): string
+    {
+        if (!isset($primary['name']) || !\is_string($primary['name']) || $primary['name'] === '') {
+            throw new \InvalidArgumentException("Primary array root missing valid 'name'.");
+        }
+        $rootName      = $primary['name'];
+        $xmlHelperData = $this->primaryToXmlHelperTree($primary); // includes '@attributes' and child tags
+
+        // XmlHelper::createXML expects the root tag name and the subtree data beneath it
+        $dom = XmlHelper::createXML($rootName, $xmlHelperData);
+        // Optional minify of empty tags for consistency with your writer
+        $xml = XmlHelper::minifyEmptyTags($dom->saveXML());
         return $xml;
     }
 
-    /* ===================== Internal: XML & Maps ===================== */
-
-    private function loadXmlString(string $xml): \SimpleXMLElement
+    /** JSON (primary) → LSX XML (convenience). */
+    public function buildLsxFromPrimaryDialog(string $primaryDialog): string
     {
-        $xml = trim($xml);
-        if ($xml === '') {
-            throw new \InvalidArgumentException('Empty XML string.');
+        $arr = json_decode($primaryDialog, true);
+        if ($arr === null && json_last_error() !== JSON_ERROR_NONE) {
+            throw new \RuntimeException("Invalid JSON: " . json_last_error_msg());
         }
-        \libxml_use_internal_errors(true);
-        $sx = \simplexml_load_string(
-            $xml,
-            "SimpleXMLElement",
-            LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET | LIBXML_BIGLINES | LIBXML_NOCDATA
-        );
-        if ($sx === false) {
-            $errs = array_map(fn($e) => trim($e->message ?? ''), \libxml_get_errors() ?: []);
-            \libxml_clear_errors();
-            throw new \RuntimeException('Failed to parse XML: ' . implode(' | ', array_filter($errs)));
-        }
-        return $sx;
+        return $this->buildLsxFromPrimaryArray($arr);
     }
 
-    /** <content contentuid="...">text</content> → [handle => text] */
-    private function buildHandleMapFromXml(\SimpleXMLElement $english): array
+    /* ===================== Internal: XML via XmlHelper ===================== */
+
+    /** Load XML text using XmlHelper; return [rootName, rootSubtreeArray] */
+    private function loadXmlAsArr(string $xmlText): array
+    {
+        $xmlText = trim($xmlText);
+        if ($xmlText === '') {
+            throw new \InvalidArgumentException('Empty XML string.');
+        }
+        $docArr = XmlHelper::createArray($xmlText); // [rootName => subtree]
+        $rootName = array_key_first($docArr);
+        if ($rootName === null) {
+            throw new \RuntimeException('XmlHelper parser returned empty document.');
+        }
+        return [$rootName, $docArr[$rootName]];
+    }
+
+    /** Merge MANY english.xml-like strings → [handle => text]. */
+    private function buildHandleMapFromEnglishStrings(array $englishXmlStrings, bool $laterWins = true): array
     {
         $map = [];
-        $contents = $english->xpath("//content");
-        if ($contents) {
+        foreach ($englishXmlStrings as $xml) {
+            if (!\is_string($xml) || trim($xml) === '') {
+                continue;
+            }
+            // Parse with XmlHelper and extract <content contentuid="...">@value
+            [$rootName, $subtree] = $this->loadXmlAsArr($xml);
+            // Typically 'contentList' root; robustly scan for 'content'
+            $contents = $this->collectAllByTag($subtree, 'content');
             foreach ($contents as $c) {
-                $uid  = (string)($c['contentuid'] ?? '');
-                $text = trim((string)$c);
-                if ($uid !== '') {
+                $uid  = $c['@attributes']['contentuid'] ?? '';
+                $text = isset($c['@value']) ? trim((string)$c['@value']) : '';
+                if ($uid === '') {
+                    continue;
+                }
+                if ($laterWins || !array_key_exists($uid, $map)) {
                     $map[$uid] = $text;
                 }
             }
@@ -156,178 +189,274 @@ class DialogHelper
         return $map;
     }
 
-    /* ===================== Internal: Primary Parse ===================== */
+    /* ===================== Internal: Convert XmlHelper array → Primary ===================== */
 
     /**
-     * Convert any XML element to the primary-array node:
-     *   [ 'name' => tag, 'attrs' => [...], 'children' => [...] ]
-     * For <attribute type="TranslatedString" handle="..."> add attrs['text'] with resolved value.
+     * Convert XmlHelper element subtree to the “primary” shape.
+     * $nodeName is the tag name, $nodeArr is XmlHelper’s element array.
      */
-    private function elementToArrayFromXml(\SimpleXMLElement $el, array $handleMap): array
+    private function xmlHelperTreeToPrimary(string $nodeName, array $nodeArr, array $handleMap): array
     {
-        $node = [
-            'name'     => $el->getName(),
+        $out = [
+            'name'     => $nodeName,
             'attrs'    => [],
-            'children' => []
+            'children' => [],
         ];
 
-        foreach ($el->attributes() as $k => $v) {
-            $node['attrs'][(string)$k] = (string)$v;
+        // Attributes
+        if (isset($nodeArr['@attributes']) && \is_array($nodeArr['@attributes'])) {
+            $out['attrs'] = $nodeArr['@attributes'];
         }
 
-        if (\strcasecmp($node['name'], 'attribute') === 0) {
-            $type   = $node['attrs']['type']   ?? '';
-            $handle = $node['attrs']['handle'] ?? '';
-            if (\strcasecmp($type, 'TranslatedString') === 0 && $handle !== '') {
-                $node['attrs']['text'] = array_key_exists($handle, $handleMap) ? $handleMap[$handle] : null;
+        // If this is <attribute type="TranslatedString" handle="...">, attach resolved text
+        if (
+            \strcasecmp($nodeName, 'attribute') === 0 &&
+            isset($out['attrs']['type']) &&
+            \strcasecmp($out['attrs']['type'], 'TranslatedString') === 0 &&
+            isset($out['attrs']['handle'])
+        ) {
+            $h = (string)$out['attrs']['handle'];
+            $out['attrs']['text'] = array_key_exists($h, $handleMap) ? $handleMap[$h] : null;
+        }
+
+        // XmlHelper groups children under tag keys; restore to children[] list
+        foreach ($nodeArr as $key => $val) {
+            if ($key === '@attributes' || $key === '@value') {
+                continue;
+            }
+
+            if (\is_array($val) && $this->isList($val)) {
+                // multiple children with same tag
+                foreach ($val as $childSub) {
+                    if (!\is_array($childSub)) continue;
+                    $out['children'][] = $this->xmlHelperTreeToPrimary($key, $childSub, $handleMap);
+                }
+            } elseif (\is_array($val)) {
+                // single child with tag = $key
+                $out['children'][] = $this->xmlHelperTreeToPrimary($key, $val, $handleMap);
+            } else {
+                // Scalar child content under a named element (rare in LSX) – represent as element with value
+                $out['children'][] = [
+                    'name'     => $key,
+                    'attrs'    => [],
+                    'children' => [],
+                ];
             }
         }
 
-        foreach ($el->children() as $child) {
-            $node['children'][] = $this->elementToArrayFromXml($child, $handleMap);
-        }
-
-        return $node;
+        return $out;
     }
 
     /* ===================== Internal: Secondary (roots + graph) ===================== */
 
-    /** Collect RootNodes UUIDs (attribute form + list form). */
-    private function collectRootUuidsFromXml(\SimpleXMLElement $xml): array
+    /** Build secondary {roots, graph} from the XmlHelper LSX subtree. */
+    private function secondaryFromXmlHelperTree(array $lsxRoot): array
+    {
+        return [
+            'roots' => $this->collectRootUuids($lsxRoot),
+            'graph' => $this->buildGraphNodesOnly($lsxRoot),
+        ];
+    }
+
+    /** Collect RootNodes UUIDs from:
+     *   - <attribute id="RootNodes" value="..."/>
+     *   - <node id="RootNodes">...<attribute id="UUID" value="..."/></node>
+     */
+    private function collectRootUuids(array $tree): array
     {
         $roots = [];
-        foreach ($xml->xpath("//attribute[@id='RootNodes' and @value]") as $a) {
-            $roots[] = (string)$a['value'];
-        }
-        $listAttrs = $xml->xpath("//node[@id='RootNodes']//attribute[@id='UUID' and @value]");
-        if ($listAttrs) {
-            foreach ($listAttrs as $ra) {
-                $roots[] = (string)$ra['value'];
+
+        // 1) attribute form
+        foreach ($this->collectAllByTag($tree, 'attribute') as $attr) {
+            $a = $attr['@attributes'] ?? [];
+            if (($a['id'] ?? null) === 'RootNodes' && !empty($a['value'])) {
+                $roots[] = (string)$a['value'];
             }
         }
-        return array_values(array_unique(array_filter($roots, fn($x) => $x !== '')));
-    }
 
-    /**
-     * Graph for ONLY <node id="node">:
-     *   key = node UUID
-     *   val = UUIDs under <node id="children">...<node id="child"><attribute id="UUID" .../></node>
-     * Nodes with no children are kept as [].
-     */
-    private function buildGraphNodesOnlyFromXml(\SimpleXMLElement $xml): array
-    {
-        $graph = [];
-        $nodes = $xml->xpath(".//node[@id='node']");
-        if ($nodes) {
-            foreach ($nodes as $entry) {
-                // Node UUID
-                $uuidAttr = $entry->xpath("attribute[@id='UUID' and @value]");
-                if (!$uuidAttr || !isset($uuidAttr[0])) {
-                    continue;
+        // 2) node form: <node id="RootNodes"> ... UUID attributes inside
+        foreach ($this->collectAllByTag($tree, 'node') as $node) {
+            $na = $node['@attributes'] ?? [];
+            if (($na['id'] ?? null) !== 'RootNodes') {
+                continue;
+            }
+            foreach ($this->collectAllByTag($node, 'attribute') as $attr) {
+                $a = $attr['@attributes'] ?? [];
+                if (($a['id'] ?? null) === 'UUID' && !empty($a['value'])) {
+                    $roots[] = (string)$a['value'];
                 }
-                $selfUuid = (string)$uuidAttr[0]['value'];
-                if ($selfUuid === '') {
-                    continue;
-                }
-
-                // Immediate children
-                $children = [];
-                $uuidAttrs = $entry->xpath(".//node[@id='children']//node[@id='child']/attribute[@id='UUID' and @value]");
-                if ($uuidAttrs) {
-                    foreach ($uuidAttrs as $a) {
-                        $val = (string)$a['value'];
-                        if ($val !== '' && \strcasecmp($val, $selfUuid) !== 0) {
-                            $children[] = $val;
-                        }
-                    }
-                }
-
-                // De-dupe, preserve order
-                $seen = [];
-                $flat = [];
-                foreach ($children as $c) {
-                    if (isset($seen[$c])) {
-                        continue;
-                    }
-                    $seen[$c] = true;
-                    $flat[] = $c;
-                }
-                $graph[$selfUuid] = $flat;
             }
         }
-        return $graph;
-    }
 
-    /* ===================== Internal: Serializer ===================== */
-
-    private function xmlAttrEscape(string $s): string
-    {
-        return \htmlspecialchars($s, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    }
-
-    /** Deterministic attribute order (nicer diffs). */
-    private function orderAttrs(array $attrs): array
-    {
-        $priority = ['id', 'key', 'type', 'handle', 'value', 'version'];
-        $out = [];
-        foreach ($priority as $k) {
-            if (array_key_exists($k, $attrs)) {
-                $out[$k] = $attrs[$k];
-                unset($attrs[$k]);
-            }
-        }
-        \ksort($attrs, SORT_STRING);
-        foreach ($attrs as $k => $v) {
-            $out[$k] = $v;
+        // unique, keep order
+        $seen = [];
+        $out  = [];
+        foreach ($roots as $r) {
+            if ($r === '' || isset($seen[$r])) continue;
+            $seen[$r] = true;
+            $out[] = $r;
         }
         return $out;
     }
 
-    /** Drop attrs['text'] on <attribute type="TranslatedString" ...>. */
-    private function sanitizeAttrsForNode(array $node): array
+    /**
+     * Graph: ONLY <node id="node"> entries.
+     *  key = node's own UUID (from immediate child attribute id="UUID")
+     *  val = UUIDs found under any <node id="children"> ... <node id="child"> ... <attribute id="UUID" value="..."/>
+     */
+    private function buildGraphNodesOnly(array $tree): array
     {
-        $attrs = $node['attrs'] ?? [];
+        $graph = [];
+
+        foreach ($this->collectAllByTag($tree, 'node') as $entry) {
+            $attrs = $entry['@attributes'] ?? [];
+            if (($attrs['id'] ?? null) !== 'node') continue;
+
+            // Self UUID from immediate <attribute id="UUID" .../> children of this node
+            $selfUuid = $this->firstImmediateAttributeValue($entry, 'UUID');
+            if ($selfUuid === null || $selfUuid === '') {
+                continue;
+            }
+
+            // Find <node id="children"> descendants directly under this node
+            $childUuids = [];
+            $childContainers = $this->immediateChildrenByTagId($entry, 'node', 'children');
+            foreach ($childContainers as $container) {
+                // Inside container, look for <node id="child"> ... then its immediate attribute UUID
+                $childNodes = $this->immediateChildrenByTagId($container, 'node', 'child');
+                foreach ($childNodes as $childNode) {
+                    $uuid = $this->firstImmediateAttributeValue($childNode, 'UUID');
+                    if ($uuid !== null && $uuid !== '' && strcasecmp($uuid, $selfUuid) !== 0) {
+                        $childUuids[] = $uuid;
+                    }
+                }
+            }
+
+            // De-dupe, order-preserving
+            $seen = [];
+            $list = [];
+            foreach ($childUuids as $u) {
+                if (isset($seen[$u])) continue;
+                $seen[$u] = true;
+                $list[] = $u;
+            }
+            $graph[$selfUuid] = $list;
+        }
+
+        return $graph;
+    }
+
+    /* ===================== Internal: Primary → XmlHelper array ===================== */
+
+    /** Convert primary node → XmlHelper subtree (array with '@attributes' and tag-keyed children). */
+    private function primaryToXmlHelperTree(array $node): array
+    {
+        $name     = $node['name']     ?? '';
+        $attrs    = $node['attrs']    ?? [];
+        $children = $node['children'] ?? [];
+
+        // sanitize: drop 'text' on TranslatedString attributes (not part of LSX)
         if (
-            isset($node['name']) &&
-            \strtolower($node['name']) === 'attribute' &&
-            isset($attrs['type']) &&
-            \strcasecmp($attrs['type'], 'TranslatedString') === 0 &&
+            \is_string($name) && \strcasecmp($name, 'attribute') === 0 &&
+            isset($attrs['type']) && \strcasecmp((string)$attrs['type'], 'TranslatedString') === 0 &&
             array_key_exists('text', $attrs)
         ) {
             unset($attrs['text']);
         }
-        return $attrs;
+
+        $out = [];
+        if (!empty($attrs)) {
+            $out['@attributes'] = $attrs;
+        }
+
+        if (\is_array($children)) {
+            // group by tag name to fit XmlHelper’s structure
+            $grouped = [];
+            foreach ($children as $child) {
+                if (!\is_array($child) || !isset($child['name'])) continue;
+                $tag = (string)$child['name'];
+                $grouped[$tag] = $grouped[$tag] ?? [];
+                $grouped[$tag][] = $this->primaryToXmlHelperTree($child);
+            }
+            // collapse singletons
+            foreach ($grouped as $tag => $list) {
+                $out[$tag] = (count($list) === 1) ? $list[0] : $list;
+            }
+        }
+
+        return $out;
     }
 
-    private function renderElement(array $node, int $indentLevel = 0): string
+    /* ===================== Internal: XmlHelper traversal utils ===================== */
+
+    /** Return true if the array is a numerically-indexed list. */
+    private function isList(array $arr): bool
     {
-        $name     = $node['name']     ?? '';
-        $children = $node['children'] ?? [];
-        if ($name === '') {
-            return '';
-        }
+        return array_keys($arr) === range(0, count($arr) - 1);
+    }
 
-        $indent   = \str_repeat("\t", $indentLevel);
-        $attrsArr = $this->orderAttrs($this->sanitizeAttrsForNode($node));
+    /** Collect all elements with a given tag from a subtree produced by XmlHelper. */
+    private function collectAllByTag(array $subtree, string $tag): array
+    {
+        $found = [];
 
-        $attrsStr = '';
-        foreach ($attrsArr as $k => $v) {
-            $attrsStr .= ' ' . $k . '="' . $this->xmlAttrEscape((string)$v) . '"';
-        }
+        $stack = [$subtree];
+        while ($stack) {
+            $cur = array_pop($stack);
+            foreach ($cur as $k => $v) {
+                if ($k === '@attributes' || $k === '@value') continue;
 
-        if (empty($children)) {
-            return "{$indent}<{$name}{$attrsStr} />\n";
-        }
+                if ($k === $tag) {
+                    if (\is_array($v) && $this->isList($v)) {
+                        foreach ($v as $one) if (\is_array($one)) $found[] = $one;
+                    } elseif (\is_array($v)) {
+                        $found[] = $v;
+                    }
+                }
 
-        $buf = "{$indent}<{$name}{$attrsStr}>\n";
-        foreach ($children as $child) {
-            if (!is_array($child)) {
-                continue;
+                if (\is_array($v)) {
+                    if ($this->isList($v)) {
+                        foreach ($v as $one) if (\is_array($one)) $stack[] = $one;
+                    } else {
+                        $stack[] = $v;
+                    }
+                }
             }
-            $buf .= $this->renderElement($child, $indentLevel + 1);
         }
-        $buf .= "{$indent}</{$name}>\n";
-        return $buf;
+
+        return $found;
+    }
+
+    /** Get immediate child <attribute id="$id" value="..."> of a given XmlHelper node array. */
+    private function firstImmediateAttributeValue(array $node, string $id): ?string
+    {
+        if (!isset($node['attribute'])) return null;
+        $attrsList = $node['attribute'];
+        $list = $this->isList($attrsList) ? $attrsList : [$attrsList];
+        foreach ($list as $attr) {
+            $a = $attr['@attributes'] ?? [];
+            if (($a['id'] ?? null) === $id && isset($a['value'])) {
+                return (string)$a['value'];
+            }
+        }
+        return null;
+    }
+
+    /** Immediate children by tag+id: e.g., tag='node', id='children' returns list of those subtrees. */
+    private function immediateChildrenByTagId(array $node, string $tag, string $id): array
+    {
+        $out = [];
+        if (!isset($node[$tag])) return $out;
+
+        $list = $node[$tag];
+        $list = $this->isList($list) ? $list : [$list];
+        foreach ($list as $child) {
+            $a = $child['@attributes'] ?? [];
+            if (($a['id'] ?? null) === $id) {
+                $out[] = $child;
+            }
+        }
+        return $out;
     }
 }
 
