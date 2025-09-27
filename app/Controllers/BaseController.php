@@ -44,6 +44,12 @@ abstract class BaseController extends Controller
     // protected $session;
 
     /**
+     * Cache for lazily-loaded models.
+     * @var array<class-string, object>
+     */
+    protected array $modelCache = [];
+
+    /**
      * @return void
      */
     public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
@@ -55,4 +61,22 @@ abstract class BaseController extends Controller
 
         // E.g.: $this->session = service('session');
     }
+
+    /**
+     * Lazy-load a model by FQCN or by short name registered with CI.
+     * Never instantiates until you actually call this method.
+     *
+     * @template T of object
+     * @param class-string<T>|string $class
+     * @return T
+     */
+    protected function m(string $class)
+    {
+        if (!isset($this->modelCache[$class])) {
+            // Uses the CI4 global helper `model()` so it respects configuration.
+            $this->modelCache[$class] = model($class);
+        }
+        return $this->modelCache[$class];
+    }
 }
+?>

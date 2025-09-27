@@ -20,7 +20,6 @@
 
 namespace App\Libraries;
 
-use Config\Bg3LinuxHelper;
 use SimpleXMLElement;
 
 class LocalizationScanner
@@ -91,11 +90,11 @@ class LocalizationScanner
      * Later files override earlier keys.
      */
     public function buildHandleMapForMod(
-        array $manifest,            // from scanMyModsManifest()
-        string $modName,            // key in $manifest
-        array|string|null $paths = null, // explicit XML path(s) (wins over languages/all)
-        array $languages = [],      // e.g. ['en','fr']; uses manifest[mod]['by_language']
-        bool $all = false           // if true, uses manifest[mod]['xml_files']
+        array $manifest,                  // from scanMyModsManifest()
+        string $modName,                  // key in $manifest
+        array|string|null $paths = null,  // explicit XML path(s) (wins over languages/all)
+        array $languages = [],            // e.g. ['en','fr']; uses manifest[mod]['by_language']
+        bool $all = false                 // if true, uses manifest[mod]['xml_files']
     ): array {
         if (!isset($manifest[$modName])) return [];
 
@@ -189,9 +188,18 @@ class LocalizationScanner
         $map = [];
         foreach ($paths as $p) {
             if (!is_file($p)) continue;
-            $xml = @file_get_contents($p);
+
+            $xml = null;
+            try {
+                $xml = service('contentService')->read($p);
+            } catch (\Throwable $__) {
+                // fallback for paths outside allowed roots
+                $xml = @file_get_contents($p);
+            }
             if ($xml === false || $xml === '') continue;
+
             $partial = $this->buildHandleMapFromString($xml);
+
             // merge
             if ($laterWins) {
                 foreach ($partial as $k => $v) $map[$k] = $v;
@@ -269,29 +277,33 @@ class LocalizationScanner
         return $entries;
     }
 
+    /** Prefer override, else CI4 pathResolver()->myMods() */
     private function resolveMyModsRoot(?string $override): ?string
     {
-        $root = $override;
-        if (!$root || $root === '') {
-            $cfg = config(Bg3LinuxHelper::class);
-            $root = $cfg?->MyMods ?? '';
+        if ($override && is_dir($override)) {
+            $real = realpath($override) ?: $override;
+            return is_dir($real) ? $real : null;
         }
-        if ($root === '') return null;
-
-        if ($root[0] !== '/' && !preg_match('~^[A-Za-z]:[\\\\/]~', $root)) {
-            $root = rtrim(ROOTPATH, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $root;
-        }
-        $real = @realpath($root);
-        return (is_string($real) && is_dir($real)) ? $real : (is_dir($root) ? $root : null);
+        $paths = service('pathResolver');
+        $root  = $paths->myMods();
+        return ($root && is_dir($root)) ? $root : null;
     }
 
     private function looksLikeLocalizationXml(string $xmlPath): bool
     {
-        $fh = @fopen($xmlPath, 'rb');
-        if (!$fh) return false;
-        $head = @fread($fh, 4096);
-        @fclose($fh);
-        if ($head === false || $head === '') return false;
+        // Try reading via contentService (then trim to head), else fallback to native head-read
+        $head = null;
+        try {
+            $bytes = service('contentService')->read($xmlPath);
+            $head  = substr($bytes, 0, 4096);
+        } catch (\Throwable $__) {
+            $fh = @fopen($xmlPath, 'rb');
+            if ($fh) {
+                $head = @fread($fh, 4096);
+                @fclose($fh);
+            }
+        }
+        if (!$head) return false;
 
         // quick signature checks
         if (preg_match('/<content\s+[^>]*contentuid\s*=\s*"/i', $head)) return true;
@@ -342,4 +354,4 @@ class LocalizationScanner
         return null;
     }
 }
-
+?>

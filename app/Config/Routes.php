@@ -14,7 +14,12 @@ $routes->get('mods/(:segment)', [Mods::class, 'index']);
 $routes->get('mods/(:segment)/(:segment)', [Mods::class, 'index']);
 $routes->get('mods/(:segment)/(:segment)/(:any)', [Mods::class, 'index']);
 
-$routes->get('display/(:segment)/(:segment)/(:any)', [Mods::class, 'display']);
+$routes->get('display/(:segment)',          'Display::view/$1');        // root only -> path empty
+$routes->get('display/(:segment)/(.+)',     'Display::view/$1/$2');     // view file
+$routes->post('display/(:segment)/(.+)',    'Display::save/$1/$2');     // save file
+$routes->get('browse/(:segment)',           'Display::browse/$1');      // list root
+$routes->get('browse/(:segment)/(.+)',      'Display::browse/$1/$2');   // list subdir
+
 $routes->get('search/(:segment)/(:segment)/(:any)', [Mods::class, 'search']);
 $routes->get('replace/(:segment)/(:segment)/(:segment)/(:any)', [Mods::class, 'replace']);
 

@@ -8,11 +8,11 @@ RUN sed -i 's/bookworm/testing/'g /etc/apt/sources.list.d/debian.sources \
    && apt-get update --allow-releaseinfo-change && apt-get dist-upgrade -y && apt-get install locales -y \
    && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && locale-gen \
    && apt-get install --allow-remove-essential -yf gnupg gnupg-agent wget cron gettext-base dnsutils libmagickwand-dev imagemagick \
-   libzip-dev libfreetype6-dev libjpeg62-turbo-dev libpng-dev xml-core unzip libssl-dev libonig-dev \
+   libzip-dev libfreetype6-dev libjpeg62-turbo-dev libpng-dev xml-core unzip libssl-dev libonig-dev sqlite3 libsqlite3-dev \
    libicu-dev libxml2 libxml2-dev git jq libxslt-dev ssmtp mailutils vim \
    && docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
    && docker-php-ext-configure pcntl --enable-pcntl \
-   && docker-php-ext-install -j$(nproc) bcmath exif gettext gd zip iconv intl soap mbstring dom shmop sockets sysvmsg sysvsem sysvshm xsl \
+   && docker-php-ext-install -j$(nproc) bcmath exif gettext gd zip iconv intl soap mbstring dom shmop sockets sysvmsg sysvsem sysvshm xsl mysqli pdo pdo_sqlite \
    && pecl install imagick mongodb \
    && docker-php-ext-enable exif gettext shmop sockets sysvmsg sysvsem sysvshm xsl zip imagick mongodb \
    && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false gnupg gnupg-agent \

@@ -1,0 +1,121 @@
+<?php
+
+namespace App\Services;
+
+use Config\BG3Paths;
+
+/**
+ * ContentService centralizes safe file reading/writing and basic directory listing.
+ */
+class ContentService
+{
+    public function __construct(
+        private readonly PathResolver $paths,
+        private readonly BG3Paths $cfg,
+    ) {}
+
+    /**
+     * Read a file from disk after verifying it is inside an allowed root.
+     * @throws \RuntimeException
+     */
+    public function read(string $absoluteOrRelativePath): string
+    {
+        $abs  = $this->paths->assertInAnyRoot($absoluteOrRelativePath);
+        $data = @file_get_contents($abs);
+        if ($data === false) {
+            throw new \RuntimeException("Failed to read file: {$abs}");
+        }
+        return $data;
+    }
+
+    /**
+     * Write to a file atomically with a .tmp + rename. Creates parent dirs if needed.
+     * Optionally normalizes newlines to "\n".
+     * @throws \RuntimeException
+     */
+    public function write(string $absoluteOrRelativePath, string $content, bool $normalizeLF = true): void
+    {
+        $abs = $this->paths->assertInAnyRoot($absoluteOrRelativePath);
+        $dir = dirname($abs);
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true)) {
+            throw new \RuntimeException("Failed to create directory: {$dir}");
+        }
+
+        if ($normalizeLF) {
+            $content = $this->normalizeNewlines($content);
+        }
+
+        $tmp = $abs . '.tmp';
+        if (@file_put_contents($tmp, $content) === false) {
+            throw new \RuntimeException("Failed to write temp file: {$tmp}");
+        }
+
+        // Simple backup
+        if (file_exists($abs)) {
+            @copy($abs, $abs . '.bak');
+        }
+
+        if (!@rename($tmp, $abs)) {
+            @unlink($tmp);
+            throw new \RuntimeException("Atomic rename failed for: {$abs}");
+        }
+    }
+
+    /**
+     * List a directory (non-recursive), optional extension filter.
+     * Returns: [['name'=>..., 'path'=>..., 'isDir'=>bool], ...]
+     *
+     * @param 'GameData'|'MyMods'|'UnpackedMods' $rootKey
+     * @param string $relative
+     * @param array<string>|null $exts
+     * @throws \RuntimeException
+     */
+    public function listDir(string $rootKey, string $relative = '', ?array $exts = null): array
+    {
+        $base = $this->paths->join($rootKey, $relative);
+        if (!is_dir($base)) {
+            throw new \RuntimeException("Not a directory: {$base}");
+        }
+
+        $exts = $exts ?? ($this->cfg->allowedExtensions ?? []);
+        $exts = array_map('strtolower', $exts);
+
+        $out = [];
+        $it  = new \FilesystemIterator($base, \FilesystemIterator::SKIP_DOTS);
+        foreach ($it as $info) {
+            /** @var \SplFileInfo $info */
+            $isDir = $info->isDir();
+            $path  = $info->getPathname();
+            if (!$isDir && !empty($exts)) {
+                $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                if ($ext !== '' && !in_array($ext, $exts, true)) {
+                    continue;
+                }
+            }
+            $out[] = [
+                'name'  => $info->getFilename(),
+                'path'  => $path,
+                'isDir' => $isDir,
+            ];
+        }
+
+        usort($out, function ($a, $b) {
+            // dirs first, then natural alpha
+            if ($a['isDir'] !== $b['isDir']) {
+                return $a['isDir'] ? -1 : 1;
+            }
+            return strnatcasecmp($a['name'], $b['name']);
+        });
+
+        return $out;
+    }
+
+    /** Normalize CRLF/CR to LF for consistent diffs & storage. */
+    public function normalizeNewlines(string $s): string
+    {
+        $s = str_replace("\r\n", "\n", $s);
+        $s = str_replace("\r", "\n", $s);
+        return $s;
+    }
+}
+?>

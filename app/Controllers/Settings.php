@@ -22,37 +22,75 @@ namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 use App\Libraries\EnvWriter;
-use Config\BG3LinuxHelper as Bg3Cfg;
+use Config\BG3Paths as PathsCfg;
 use Config\Mongo as MongoCfg;
 
 class Settings extends BaseController
 {
     public function index(): ResponseInterface
     {
-        $bg3   = config(Bg3Cfg::class) ?? new Bg3Cfg();
-        $mongo = config(MongoCfg::class) ?? new MongoCfg();
+        /** @var PathsCfg $pathsCfg */
+        $pathsCfg = config(PathsCfg::class) ?? new PathsCfg();
+        /** @var MongoCfg $mongoCfg */
+        $mongoCfg = config(MongoCfg::class) ?? new MongoCfg();
+
+        // Resolved roots from CI4 services (if configured)
+        $paths = service('pathResolver');
 
         return $this->response->setBody(view('settings/index', [
             'pageTitle' => 'Settings',
-            'activeTab' => 'settings',    // useful if your nav highlights the active tab
-            'bg3'       => $bg3,
-            'mongo'     => $mongo,
+            'activeTab' => 'settings',
+
+            // Raw config objects for template access (env keys, etc.)
+            'bg3'   => $pathsCfg,
+            'mongo' => $mongoCfg,
+
+            // Resolved, normalized paths (may be null if not set)
+            'resolved' => [
+                'GameData'     => $paths->gameData(),
+                'MyMods'       => $paths->myMods(),
+                'UnpackedMods' => $paths->unpackedMods(),
+            ],
         ]));
     }
 
     public function save(): ResponseInterface
     {
+        // Accept both legacy AllMods and new UnpackedMods
+        $myMods        = $this->postString('bg3LinuxHelper_MyMods');
+        $unpackedMods  = $this->postString('bg3LinuxHelper_UnpackedMods');
+        $allModsLegacy = $this->postString('bg3LinuxHelper_AllMods'); // legacy alias for UnpackedMods
+        if ($unpackedMods === '' && $allModsLegacy !== '') {
+            $unpackedMods = $allModsLegacy;
+        }
+
+        $gameData = $this->postString('bg3LinuxHelper_GameData');
+        $mongoUri = $this->postString('mongo_default_uri');
+        $mongoDb  = $this->postString('mongo_default_db');
+
+        // Persist to .env using the new canonical keys used by BG3Paths
         $pairs = [
-            'bg3LinuxHelper.MyMods'   => (string)$this->request->getPost('bg3LinuxHelper_MyMods'),
-            'bg3LinuxHelper.AllMods'  => (string)$this->request->getPost('bg3LinuxHelper_AllMods'),
-            'bg3LinuxHelper.GameData' => (string)$this->request->getPost('bg3LinuxHelper_GameData'),
-            'mongo.default.uri'       => (string)$this->request->getPost('mongo_default_uri'),
-            'mongo.default.db'        => (string)$this->request->getPost('mongo_default_db'),
+            'bg3LinuxHelper.MyMods'       => $myMods,
+            'bg3LinuxHelper.UnpackedMods' => $unpackedMods, // replaces legacy AllMods
+            'bg3LinuxHelper.GameData'     => $gameData,
+            'mongo.default.uri'           => $mongoUri,
+            'mongo.default.db'            => $mongoDb,
         ];
 
         (new EnvWriter())->setMany($pairs);
 
-        return $this->response->setJSON(['ok' => true, 'saved' => $pairs]);
+        return $this->response->setJSON([
+            'ok'    => true,
+            'saved' => $pairs,
+        ]);
+    }
+
+    // --------- helpers ---------
+
+    private function postString(string $key): string
+    {
+        $v = (string)($this->request->getPost($key) ?? '');
+        return trim($v);
     }
 }
-?>
+

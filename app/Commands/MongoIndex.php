@@ -90,7 +90,7 @@ class MongoIndex extends BaseCommand
                 $category = strtolower($parts[0] ?? 'unknown');
                 $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
-                $raw = file_get_contents($filePath);
+                $raw = service('contentService')->read($filePath);
 
                 $data = [
                     'filepath'   => $relativePath,
@@ -107,7 +107,8 @@ class MongoIndex extends BaseCommand
                       log_message('warning', "Skipping large file: {$filePath}");
                       continue;
                     }
-                    $content = file_get_contents($filePath);
+                    $content = service('contentService')->read($filePath);
+
                     $data['raw'] = $content;
 
                     $collection->replaceOne(

@@ -24,8 +24,11 @@ class Home extends BaseController
 {
     public function index(): string
     {
-        $readmePath = FCPATH . "/README.md";
-        $data['readme'] = file_exists($readmePath) ? file_get_contents($readmePath) : "README not found.";
+      $readmePath = ROOTPATH . 'README.md';
+      $data['readme'] = file_exists($readmePath)
+        ? (function($p){ try { return service('contentService')->read($p); } catch (\Throwable $__) { return @file_get_contents($p); } })($readmePath)
+        : "README not found.";
+
         return view('templates/header')
             . view('readme')
             . view('templates/footer');

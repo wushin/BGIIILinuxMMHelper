@@ -67,7 +67,7 @@ class BG3readwriteparse extends Model
     private function parseLang(string $langfile): void
     {
         if (FilePathHelper::testFile($langfile)) {
-            $xml = file_get_contents($langfile);
+            $xml = service('contentService')->read($langfile);
             $this->_Lang[$langfile] = XmlHelper::createArray($xml);
         } else {
             $this->_Lang[$langfile] = "Empty";
@@ -123,64 +123,8 @@ class BG3readwriteparse extends Model
     {
         $region = $this->detectRegionFromFileHead($filepath) ?? 'unknown';
 
-        switch ($region) {
-            // --- Dialog & timeline (keep full parse; likely to be edited/inspected) ---
-            case 'dialog':
-            case 'DialogBank':
-            case 'TimelineBank':
-            case 'TimelineContent':
-            case 'TLScene':
-                $xmlArr = XmlHelper::createArray(file_get_contents($filepath));
-                break;
-
-            // --- Gameplay/Data definitions ---
-            case 'AbilityDistributionPresets':
-            case 'ActionResourceDefinitions':
-            case 'Backgrounds':
-            case 'CharacterCreationAppearanceVisuals':
-            case 'CharacterCreationPresets':
-            case 'CharacterVisualBank':
-            case 'ClassDescriptions':
-            case 'ConditionErrors':
-            case 'Config':
-            case 'DefaultValues':
-            case 'Dependencies':
-            case 'Effect':
-            case 'EffectBank':
-            case 'EnterPhaseSoundEvents':
-            case 'EnterSoundEvents':
-            case 'EquipmentLists':
-            case 'ExitPhaseSoundEvents':
-            case 'ExitSoundEvents':
-            case 'FactionContainer':
-            case 'FactionManager':
-            case 'Flags':
-            case 'IconUVList':
-            case 'LevelMapValues':
-            case 'MaterialBank':
-            case 'MetaData':
-            case 'MultiEffectInfos':
-            case 'Origins':
-            case 'PassiveLists':
-            case 'ProgressionDescriptions':
-            case 'Progressions':
-            case 'Races':
-            case 'SkillLists':
-            case 'SpellLists':
-            case 'Tags':
-            case 'Templates':
-            case 'TextureAtlasInfo':
-            case 'TextureBank':
-            case 'VisualBank':
-            case 'TooltipExtraTexts':
-                $xmlArr = XmlHelper::createArray(file_get_contents($filepath));
-                break;
-
-            // --- Unknown / not matched (still parse fully to remain compatible) ---
-            default:
-                $xmlArr = XmlHelper::createArray(file_get_contents($filepath));
-                break;
-        }
+        // Keep full parse across categories (original behavior)
+        $xmlArr = XmlHelper::createArray(service('contentService')->read($filepath));
 
         if (\is_array($xmlArr)) {
             $xmlArr['__region']      = $region;
@@ -268,13 +212,17 @@ class BG3readwriteparse extends Model
 
     private function parseKhn(string $filepath): void
     {
-        $this->_Data[$filepath][] = file_get_contents($filepath);
+        $this->_Data[$filepath][] = service('contentService')->read($filepath);
     }
 
     private function parseTxt(string $filepath): void
     {
-        $data = file($filepath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $this->_Data[$filepath] = TextParserHelper::txt2Array($data);
+        // Original used file(..., FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+        // Replicate via service read + explode + trim/skip empty.
+        $raw  = service('contentService')->read($filepath);
+        $rows = preg_split("/\r\n|\r|\n/", $raw);
+        $rows = array_values(array_filter($rows, static fn($l) => $l !== ''));
+        $this->_Data[$filepath] = TextParserHelper::txt2Array($rows);
     }
 
     /* ----------------------- Dataset builder ------------------------- */
@@ -335,11 +283,18 @@ class BG3readwriteparse extends Model
      */
     public function detectRegionFromFileHead(string $lsxPath, int $bytes = 8192): ?string
     {
-        $fh = @fopen($lsxPath, 'rb');
-        if (!$fh) return null;
-        $head = @fread($fh, $bytes);
-        @fclose($fh);
-        if ($head === false || $head === '') return null;
+        try {
+            $head = service('contentService')->read($lsxPath);
+            if ($bytes > 0 && strlen($head) > $bytes) {
+                $head = substr($head, 0, $bytes);
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if ($head === '' || $head === null) {
+            return null;
+        }
 
         if (preg_match('/<region\s+id\s*=\s*"([^"]+)"/i', $head, $m)) {
             return $m[1];
@@ -373,8 +328,8 @@ class BG3readwriteparse extends Model
 
     public function setDataTxt($filepath, $data): void
     {
-        file_put_contents($filepath, preg_replace("/\r\n?/", "\n", $data));
-        $this->_Data[$filepath][0] = file_get_contents($filepath);
+        service('contentService')->write($filepath, preg_replace("/\r\n?/", "\n", $data), true);
+        $this->_Data[$filepath][0] = service('contentService')->read($filepath);
     }
 
     public function setDataBySearch($newvalue, $locations): void
@@ -483,13 +438,14 @@ class BG3readwriteparse extends Model
             $lines .= $txt;
         }
         if ($save) {
-            file_put_contents($filepath, preg_replace("/\r\n?/", "\n", $lines));
+            service('contentService')->write($filepath, preg_replace("/\r\n?/", "\n", $lines), true);
         }
         return $lines;
     }
 
     public function displayImg($filepath, $save = false)
     {
+        // ImageMagick reads directly from path; path containment handled by caller/UI
         $img = new \Imagick($filepath);
         $img->setImageFormat('png');
         $imageDataUri = 'data:' . $img->getFormat() . ';base64,' . base64_encode($img->getimageblob());
@@ -506,7 +462,7 @@ class BG3readwriteparse extends Model
         $dom = XmlHelper::createFormattedDOM(XmlHelper::minifyEmptyTags($xml_string));
         if ($save) {
             $xml = $dom->saveXML();
-            file_put_contents($filepath, html_entity_decode($xml));
+            service('contentService')->write($filepath, html_entity_decode($xml), true);
         }
         return $dom->saveXML();
     }
@@ -526,7 +482,7 @@ class BG3readwriteparse extends Model
                     'xsd' => 'http://www.w3.org/2001/XMLSchema',
                     'xsi' => 'http://www.w3.org/2001/XMLSchema-instance'
                 ]);
-                file_put_contents($filepath, $xml);
+                service('contentService')->write($filepath, $xml, true);
             }
             return $dom->saveXML();
         }
@@ -537,7 +493,7 @@ class BG3readwriteparse extends Model
     {
         $data = TextParserHelper::array2Txt($this->_Data[$filepath]);
         if ($save) {
-            file_put_contents($filepath, preg_replace("/\r\n?/", "\n", $data));
+            service('contentService')->write($filepath, preg_replace("/\r\n?/", "\n", $data), true);
         }
         return $data;
     }
@@ -546,7 +502,7 @@ class BG3readwriteparse extends Model
     {
         $data = preg_replace("/\r\n?/", "\n", TextParserHelper::array2Txt(TextParserHelper::string2Array($txt)));
         if ($save) {
-            file_put_contents($filepath, $data);
+            service('contentService')->write($filepath, $data, true);
         }
         return $data;
     }
@@ -555,7 +511,7 @@ class BG3readwriteparse extends Model
 
     public function lsxPrimaryDialog(string $lsxPath): array
     {
-        $lsxXml    = file_get_contents($lsxPath);
+        $lsxXml    = service('contentService')->read($lsxPath);
         $handleMap = $this->buildDefaultHandleMap(false); // prefer EN if available
 
         // Always return primary; if no Lang found, attrs['text'] becomes null
@@ -565,13 +521,13 @@ class BG3readwriteparse extends Model
     public function lsxSecondaryDialog(string $lsxPath): array
     {
         // No localization needed
-        $lsxXml = file_get_contents($lsxPath);
+        $lsxXml = service('contentService')->read($lsxPath);
         return $this->dialog->secondaryDialog($lsxXml);
     }
 
     public function lsxBothDialog(string $lsxPath): array
     {
-        $lsxXml    = file_get_contents($lsxPath);
+        $lsxXml    = service('contentService')->read($lsxPath);
         $handleMap = $this->buildDefaultHandleMap(false);
 
         // Always return both; fall back to empty map if none found
