@@ -20,161 +20,91 @@
 
 namespace App\Helpers;
 
-use App\Helpers\FilePathHelper;
+use App\Helpers\XmlHelper;
 
 class FormatHelper
 {
-
-    protected static array $ignore = ['.', '..', '*.lsf'];
-
-    public static function directoryTreeToHtml(string $path, string $dir, bool $isRoot = true, ?array $ignoreRules = null): string
+    /**
+     * Wrap editable content with a consistent chrome and optional term highlight.
+     */
+    public static function wrapEditableContent(string $body, ?string $term = null): string
     {
-        // Use provided rules or fall back to a static default if present, else basic dot entries
-        if ($ignoreRules === null) {
-            $ignoreRules = property_exists(static::class, 'ignore') ? (static::$ignore ?? ['.', '..']) : ['.', '..'];
+        if ($term !== null && $term !== '') {
+            $body = self::highlight($body, $term);
         }
 
-        $contents = scandir($dir, SCANDIR_SORT_ASCENDING);
-        if (!$contents) return '';
+        return <<<HTML
+<div class="display editable">
+  {$body}
+</div>
+HTML;
+    }
 
-        $html = $isRoot ? '<ul>' : '<ul class="nested">';
-
-        foreach ($contents as $node) {
-            $fullPath     = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $node;
-            $relativePath = preg_replace('#^' . preg_quote(rtrim($path, '/\\') . DIRECTORY_SEPARATOR, '#') . '#', '', $fullPath);
-
-            // Apply ignore rules to both basename and relative path
-            if (self::isIgnoredNode($node, $relativePath, $ignoreRules)) {
-                continue;
-            }
-
-            if (is_dir($fullPath)) {
-                // If the directory itself matches ignore, it was already skipped above.
-                $html .= '<li><span class="caret">' . htmlspecialchars($node) . '</span>';
-                $html .= self::directoryTreeToHtml($path, $fullPath, false, $ignoreRules);
-                $html .= '</li>';
-            } else {
-                $encodedPath = htmlspecialchars(\App\Helpers\FilePathHelper::getFileUrlPath($path, $relativePath));
-                $html .= '<li>' . htmlspecialchars($node) .
-                         ' <button id="viewFile" class="appSystem" onclick="display(\'' . $encodedPath . '\')">Open</button></li>';
-            }
+    /**
+     * Render a <div>-based editor for a Localization XML provided as JSON.
+     * Accepts JSON like: {"contentList":{"content":[{"@attributes":{"contentuid":"..."},"@value":"Text"}, ...] }}
+     * You can obtain this via XmlHelper::createJson($xml).
+     */
+    public static function renderLangEditorFromJson(string $langJson): string
+    {
+        $data = json_decode($langJson, true);
+        if (!is_array($data)) {
+            return '<div class="display flash-red">Invalid language JSON</div>';
         }
 
-        $html .= '</ul>';
+        // Accept either wrapped ({"contentList":{...}}) or the inner object directly
+        if (count($data) === 1 && isset($data[array_key_first($data)])) {
+            $data = $data[array_key_first($data)];
+        }
+
+        $contentList = $data['content'] ?? ($data['contentList']['content'] ?? []);
+        // Normalize to array-of-items
+        if (!is_array($contentList)) {
+            $contentList = [];
+        } elseif (isset($contentList['@attributes']) || isset($contentList['@value'])) {
+            $contentList = [ $contentList ];
+        }
+
+        $html = '<div class="lang-editor">';
+        $i = 0;
+        foreach ($contentList as $item) {
+            $uid = $item['@attributes']['contentuid'] ?? '';
+            $val = $item['@value'] ?? '';
+
+            $key = 'content_' . $i;
+            $html .= '<div class="lang-row" id="' . htmlspecialchars($key) . '" data-uid="' . htmlspecialchars($uid) . '">';
+            $html .=   '<span class="uid">' . htmlspecialchars($uid) . '</span>';
+            $html .=   '<textarea name="content[' . $i . ']" class="content-text" rows="2">' . htmlspecialchars($val) . '</textarea>';
+            $html .=   '<button type="button" class="rmDiv" onclick="removeDivById(\'' . htmlspecialchars($key) . '\')">X</button>';
+            $html .= '</div>';
+            $i++;
+        }
+        $html .= '<input type="hidden" name="nextKey" value="' . $i . '" />';
+        $html .= '</div>';
+
         return $html;
     }
 
-    private static function isIgnoredNode(string $name, string $relPath, array $rules): bool
+    /**
+     * Convenience wrapper when you have raw XML instead of JSON.
+     */
+    public static function renderLangEditorFromXml(string $xml): string
     {
-        foreach ($rules as $rule) {
-            $rule = (string)$rule;
-            if ($rule === '') continue;
-
-            if (strcasecmp($rule, $name) === 0 || strcasecmp($rule, $relPath) === 0) {
-                return true;
-            }
-
-            $first = $rule[0];
-            $last  = substr($rule, -1);
-            if ($first === $last && in_array($first, ['/', '~', '#'], true)) {
-                if (@preg_match($rule, $name) || @preg_match($rule, $relPath)) {
-                    return true;
-                }
-                continue;
-            }
-
-            $rx = self::globToRegex($rule);
-            if (preg_match($rx, $name) || preg_match($rx, $relPath)) {
-                return true;
-            }
-        }
-        return false;
+        $json = XmlHelper::createJson($xml, true);
+        return self::renderLangEditorFromJson($json);
     }
 
-    private static function globToRegex(string $glob): string
+    /**
+     * Very simple substring highlighter; escapes HTML.
+     */
+    private static function highlight(string $html, string $term): string
     {
-        if ($glob !== '' && $glob[0] === '.') {
-            $glob = '*' . $glob;
+        $safeTerm = htmlspecialchars($term, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $parts = explode($term, $html);
+        if (count($parts) === 1) {
+            return $html;
         }
-
-        $quoted = preg_quote($glob, '~');
-
-        $quoted = preg_replace_callback('/(?<!\\\\)\\[(.*?)]/u', function ($m) {
-            $inner = $m[1];
-            // handle leading ! -> ^
-            if ($inner !== '' && $inner[0] === '!') {
-                $inner = '^' . substr($inner, 1);
-            }
-            return '[' . $inner . ']';
-        }, $quoted) ?? $quoted;
-
-        $quoted = strtr($quoted, [
-            '\*' => '.*',
-            '\?' => '.',
-        ]);
-
-        $quoted = str_replace('\/', '[/\\\\]', $quoted);
-
-        return '~^' . $quoted . '$~i';
-    }
-
-
-    public static function wrapEditableContent(string $content, ?string $term = null): string
-    {
-        $wrapper = '<div contenteditable="true" spellcheck="false" class="display" id="data" name="data">';
-        $closer = '</div>';
-
-        return $wrapper . self::formatData($content, $term) . $closer;
-    }
-
-    public static function formatForm(string $path, string $slug, string $key): string
-    {
-        $html = "<div id='fileName'>" . FilePathHelper::getFileName($path, $key) . 
-                " <button id=\"saveFile\" class=\"appSystem\" onclick=\"submitMainForm()\">Save</button>";
-
-        if (substr($key, -3) === "xml") {
-            $html .= "<button id=\"saveFile\" class=\"appSystem\" onclick=\"addRowToForm('mainForm')\">AddNewRow</button>";
-        }
-
-        $html .= "</div><form id=\"mainForm\">";
-        $html .= "<input type=\"hidden\" name=\"fileName\" value=\"" . FilePathHelper::getFileSavePath($path, $key) . "\"/>";
-        $html .= "<input type=\"hidden\" name=\"path\" value=\"" . $path . "\"/>";
-        $html .= "<input type=\"hidden\" name=\"slug\" value=\"" . $slug . "\"/>";
-        return $html;
-    }
-
-    public static function formatData(string $data, ?string $term = null): string
-    {
-        if (!is_null($term)) {
-            $escapedTerm = htmlspecialchars($term, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5);
-            return preg_replace(
-                '/' . preg_quote($escapedTerm, '/') . '/i',
-                '<span class="highlight">$0</span>',
-                htmlspecialchars($data, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5)
-            );
-        } else {
-            return htmlspecialchars($data, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5);
-        }
-    }
-
-    public static function langToForm(array|string $lang): string
-    {
-        if (!is_array($lang)) {
-            return "Empty";
-        }
-
-        $html = "";
-        foreach ($lang['contentList']['content'] as $key => $item) {
-            $html .= '<div class="langline" id="' . $key . '">';
-            $html .= '<input type="text" spellcheck="false" class="contentuid" name="data[content][' . $key . '][@attributes][contentuid]" value="' . htmlspecialchars($item['@attributes']['contentuid']) . '">';
-            $html .= '<input type="text" spellcheck="false" class="version" name="data[content][' . $key . '][@attributes][version]" value="' . htmlspecialchars($item['@attributes']['version']) . '">';
-            $html .= '<textarea spellcheck="false" name="data[content][' . $key . '][@value]">' . htmlspecialchars($item['@value']) . '</textarea>';
-            $html .= '<button class="rmDiv" onclick="removeDivById(\'' . $key . '\')">X</button>';
-            $html .= "</div>";
-       }
-
-       $html .= '<input type="hidden" name="nextKey" value="' . (count($lang['contentList']['content'])) . '" />';
-       return $html;
+        return implode('<mark>' . $safeTerm . '</mark>', $parts);
     }
 
     public static function stripQuotes(string $str): string
@@ -183,3 +113,4 @@ class FormatHelper
     }
 }
 ?>
+

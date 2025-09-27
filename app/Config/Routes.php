@@ -8,11 +8,15 @@ use App\Controllers\UUIDContentUIDGen;
  * @var RouteCollection $routes
  */
 $routes->get('/', 'Home::index');
-$routes->get('mods', 'Home::index');
 
-$routes->get('mods/(:segment)', [Mods::class, 'index']);
-$routes->get('mods/(:segment)/(:segment)', [Mods::class, 'index']);
-$routes->get('mods/(:segment)/(:segment)/(:any)', [Mods::class, 'index']);
+// HTML + JSON (content-negotiated)
+$routes->get('mods',                                    [Mods::class, 'list']);       // roots
+$routes->get('mods/(:segment)',                         [Mods::class, 'listRoot']);   // mods in root
+$routes->get('mods/(:segment)/(:segment)',              [Mods::class, 'mod']);        // browse mod root
+$routes->get('mods/(:segment)/(:segment)/(.+)',         [Mods::class, 'view']);       // browse inside mod (dirs/files)
+
+// JSON-only save endpoint (editor POSTS here)
+$routes->post('mods/(:segment)/(:segment)/file/(.+)',   [Mods::class, 'save']);       // write file
 
 $routes->get('display/(:segment)',          'Display::view/$1');        // root only -> path empty
 $routes->get('display/(:segment)/(.+)',     'Display::view/$1/$2');     // view file

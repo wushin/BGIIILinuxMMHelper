@@ -22,40 +22,64 @@ namespace App\Helpers;
 
 class FilePathHelper
 {
-    public static function getUrlPath(string $path, string $slug): string
+    /**
+     * Join a project root with a relative path using PathResolver.
+     * $root is one of: GameData|MyMods|UnpackedMods (legacy "AllMods" is mapped to UnpackedMods).
+     */
+    public static function join(string $root, string $rel): string
     {
-        return $path . "/" . $slug;
+        $root = self::normalizeRoot($root);
+        return service('pathResolver')->join($root, $rel);
     }
 
-    public static function getAbsPath(string $path, string $slug): string
+    /**
+     * Absolute path to a mod folder (kept for callers).
+     * Equivalent to: join($root, $slug)
+     */
+    public static function getAbsPath(string $root, string $slug): string
     {
-        return FCPATH . $path . "/" . $slug;
+        return self::join($root, $slug);
     }
 
-    public static function getFileUrlPath(string $path, string $key): string
+    /**
+     * Absolute file path inside a mod (kept for callers).
+     * Equivalent to: join($root, $slug . '/' . $rel)
+     */
+    public static function getAbsFileName(string $root, string $slug, string $rel): string
     {
-        return "/display/" . $path . "/" . preg_replace('/' . str_replace("/", "\/", FCPATH) . '(.*?)\//', '', $key);
+        $rel = ltrim($rel, '/');
+        return self::join($root, rtrim($slug, '/').'/'.$rel);
     }
 
-    public static function getFileSavePath(string $path, string $key): string
+    /**
+     * Test if a file is "non-trivial" (at least 3 non-empty lines) via ContentService.
+     */
+    public static function testFile(string $absFile): bool
     {
-        return FCPATH . $path . "/" . preg_replace('/' . str_replace("/", "\/", FCPATH) . '(.*?)\//', '', $key);
+        try {
+            $bytes = service('contentService')->read($absFile);
+        } catch (\Throwable $e) {
+            return false;
+        }
+        if ($bytes === '' || $bytes === null) return false;
+        $lines = preg_split("/\r\n|\r|\n/", $bytes);
+        $nonEmpty = 0;
+        foreach ($lines as $l) {
+            if (trim($l) !== '') $nonEmpty++;
+            if ($nonEmpty > 3) return true;
+        }
+        return false;
     }
 
-    public static function getFileName(string $path, string $key): string
+    private static function normalizeRoot(string $root): string
     {
-        return preg_replace('/' . str_replace("/", "\/", FCPATH) . $path . '\/(.*?)\//', '', $key);
-    }
-
-    public static function getAbsFileName(string $path, string $slug, string $key): string
-    {
-        return FCPATH . $path . "/" . addslashes(urldecode($slug)) . "/" . $key;
-    }
-
-    public static function testFile(string $file): bool
-    {
-        $lines = file($file);
-        return count($lines) > 3;
+        $r = strtolower($root);
+        return match ($r) {
+            'gamedata'                 => 'GameData',
+            'mymods', 'mods'           => 'MyMods',
+            'allmods', 'unpackedmods'  => 'UnpackedMods',
+            default                    => $root, // assume canonical already
+        };
     }
 }
-
+?>

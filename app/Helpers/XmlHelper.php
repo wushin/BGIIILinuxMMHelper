@@ -22,11 +22,15 @@ namespace App\Helpers;
 
 class XmlHelper
 {
-    public static function minifyEmptyTags(string $xml): string {
+    /* ---------------------------- small utilities ---------------------------- */
+
+    public static function minifyEmptyTags(string $xml): string
+    {
         return preg_replace('/"><\\/(.*?)\\>/', '"/>', $xml);
     }
 
-    public static function createFormattedDOM(string $xml): \DOMDocument {
+    public static function createFormattedDOM(string $xml): \DOMDocument
+    {
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = true;
@@ -48,18 +52,57 @@ class XmlHelper
         );
     }
 
-    public static function createArray(string $xmlContent): array
+    /* ------------------------------ JSON-centric API ------------------------------ */
+
+    /**
+     * Parse XML and return a JSON string.
+     * The JSON shape mirrors the previous array structure:
+     * - Attributes under "@attributes"
+     * - Text content under "@value"
+     * - Child elements grouped by name; singletons are objects, multiples are arrays
+     */
+    public static function createJson(string $xmlContent, bool $pretty = true): string
     {
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
         $dom->loadXML($xmlContent, LIBXML_NOCDATA);
         $root = $dom->documentElement;
 
-        return [ $root->nodeName => self::elementToArray($root) ];
+        $assoc = [$root->nodeName => self::elementToAssoc($root)];
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+        if ($pretty) {
+            $flags |= JSON_PRETTY_PRINT;
+        }
+
+        $json = json_encode($assoc, $flags);
+        if ($json === false) {
+            throw new \RuntimeException('JSON encode failed: ' . json_last_error_msg());
+        }
+        return $json;
     }
 
-    public static function createXML(string $rootElement, array $data): \DOMDocument
+    /**
+     * Create an XML DOM from JSON (or from an array for backward-compat).
+     * $data may be:
+     *   - JSON string with the same structure produced by createJson()
+     *   - An associative array using "@attributes", "@value", etc.
+     */
+    public static function createXML(string $rootElement, array|string $data): \DOMDocument
     {
+        if (is_string($data)) {
+            $decoded = json_decode($data, true);
+            if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+                throw new \InvalidArgumentException('Invalid JSON: ' . json_last_error_msg());
+            }
+            // If the JSON was produced by createJson(), it likely has a single root key.
+            // If that single root key differs from $rootElement, we still honor $rootElement
+            // as the tag name and use the value as the payload.
+            if (is_array($decoded) && count($decoded) === 1 && isset($decoded[array_key_first($decoded)])) {
+                $decoded = $decoded[array_key_first($decoded)];
+            }
+            $data = $decoded ?? [];
+        }
+
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->formatOutput = true;
 
@@ -71,7 +114,25 @@ class XmlHelper
         return $dom;
     }
 
-    private static function elementToArray(\DOMElement $element): array
+    /* ---------------------------- Back-compat shim ---------------------------- */
+
+    /**
+     * Backward compatibility for code that expects an array.
+     * Now implemented via createJson() so the JSON structure is the source of truth.
+     */
+    public static function createArray(string $xmlContent): array
+    {
+        $json = self::createJson($xmlContent, false);
+        $assoc = json_decode($json, true);
+        if (!is_array($assoc)) {
+            throw new \RuntimeException('Failed to convert XML to array via JSON pipeline.');
+        }
+        return $assoc;
+    }
+
+    /* ------------------------------- internals ------------------------------- */
+
+    private static function elementToAssoc(\DOMElement $element): array
     {
         $result = [];
 
@@ -91,19 +152,19 @@ class XmlHelper
                     $result['@value'] = $text;
                 }
             } elseif ($child instanceof \DOMElement) {
-                $childName = $child->nodeName;
-                $childArray = self::elementToArray($child);
+                $childName  = $child->nodeName;
+                $childAssoc = self::elementToAssoc($child);
 
                 if (!isset($children[$childName])) {
                     $children[$childName] = [];
                 }
-
-                $children[$childName][] = $childArray;
+                $children[$childName][] = $childAssoc;
             }
         }
 
+        // Collapse singletons
         foreach ($children as $key => $value) {
-            $result[$key] = count($value) === 1 ? $value[0] : $value;
+            $result[$key] = (count($value) === 1) ? $value[0] : $value;
         }
 
         return $result;
@@ -114,28 +175,42 @@ class XmlHelper
         foreach ($data as $key => $value) {
             if ($key === '@attributes') {
                 foreach ($value as $attrName => $attrValue) {
-                    $parent->setAttribute($attrName, $attrValue);
+                    $parent->setAttribute($attrName, (string) $attrValue);
                 }
-            } elseif ($key === '@value') {
-                $parent->appendChild($dom->createTextNode($value));
-            } elseif (is_array($value) && is_numeric(array_key_first($value))) {
+                continue;
+            }
+
+            if ($key === '@value') {
+                $parent->appendChild($dom->createTextNode((string) $value));
+                continue;
+            }
+
+            // Numeric list (multiple children with the same tag)
+            if (is_array($value) && array_key_exists(0, $value) && is_int(array_key_first($value))) {
                 foreach ($value as $subElement) {
                     $child = $dom->createElement($key);
                     $parent->appendChild($child);
                     if (is_array($subElement)) {
                         self::arrayToXmlRecursive($subElement, $child, $dom);
                     } else {
-                        $child->appendChild($dom->createTextNode($subElement));
+                        $child->appendChild($dom->createTextNode((string) $subElement));
                     }
                 }
-            } elseif (is_array($value)) {
+                continue;
+            }
+
+            // Nested object
+            if (is_array($value)) {
                 $child = $dom->createElement($key);
                 $parent->appendChild($child);
                 self::arrayToXmlRecursive($value, $child, $dom);
-            } else {
-                $child = $dom->createElement($key, htmlspecialchars($value));
-                $parent->appendChild($child);
+                continue;
             }
+
+            // Scalar child
+            $child = $dom->createElement($key);
+            $parent->appendChild($child);
+            $child->appendChild($dom->createTextNode((string) $value));
         }
     }
 }

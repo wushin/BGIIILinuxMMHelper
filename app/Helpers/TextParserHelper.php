@@ -22,154 +22,283 @@ namespace App\Helpers;
 
 class TextParserHelper
 {
-    public static function txt2Array(array $data): array
+    /**
+     * Parse BG3 .txt content into JSON.
+     * $input can be a string (full text) or an array of lines.
+     */
+    public static function txtToJson(string|array $input, bool $pretty = true): string
     {
-        $result = [];
+        $lines = is_array($input)
+            ? $input
+            : preg_split("/\r\n|\r|\n/", $input, -1, PREG_SPLIT_NO_EMPTY);
+
+        $result  = [];
         $current = null;
 
-        foreach ($data as $line) {
+        foreach ($lines as $line) {
             $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            // ---- New blocks -------------------------------------------------
             if (stripos($line, 'new entry') === 0) {
                 if ($current) $result[] = $current;
-                $id = self::stripQuotes(trim(str_replace('new entry', '', $line)));
-                $current = ['type' => 'entry', 'id' => $id, 'properties' => []];
-            } elseif (stripos($line, 'new equipment') === 0) {
+                $id = self::stripQuotes(trim(substr($line, strlen('new entry'))));
+                $current = [
+                    'type'       => 'entry',
+                    'id'         => $id,
+                    'properties' => [],
+                ];
+                continue;
+            }
+
+            if (stripos($line, 'new equipment') === 0) {
                 if ($current) $result[] = $current;
-                $id = self::stripQuotes(trim(str_replace('new equipment', '', $line)));
-                $current = ['type' => 'equipment', 'id' => $id, 'initialWeaponSet' => null, 'equipmentGroups' => []];
-            } elseif (stripos($line, 'new treasuretable') === 0) {
+                $id = self::stripQuotes(trim(substr($line, strlen('new equipment'))));
+                $current = [
+                    'type'            => 'equipment',
+                    'id'              => $id,
+                    'initialWeaponSet'=> null,
+                    'equipmentGroups' => [],
+                    'properties'      => [],
+                ];
+                continue;
+            }
+
+            if (stripos($line, 'new treasuretable') === 0) {
                 if ($current) $result[] = $current;
-                $id = self::stripQuotes(trim(str_replace('new treasuretable', '', $line)));
-                $current = ['type' => 'treasuretable', 'id' => $id, 'subtables' => []];
-            } elseif ($current && $current['type'] === 'equipment') {
+                $id = self::stripQuotes(trim(substr($line, strlen('new treasuretable'))));
+                $current = [
+                    'type'       => 'treasuretable',
+                    'id'         => $id,
+                    'subtables'  => [],
+                    'properties' => [],
+                ];
+                continue;
+            }
+
+            if (!$current) {
+                // ignore stray lines before first block
+                continue;
+            }
+
+            // ---- Equipment section lines -----------------------------------
+            if ($current['type'] === 'equipment') {
                 if (stripos($line, 'add initialweaponset') === 0) {
-                    $current['initialWeaponSet'] = self::stripQuotes(trim(str_replace('add initialweaponset', '', $line)));
-                } elseif (stripos($line, 'add equipment entry') === 0) {
-                    $entry = self::stripQuotes(trim(str_replace('add equipment entry', '', $line)));
-                    $lastGroupIndex = count($current['equipmentGroups']) - 1;
-                    if ($lastGroupIndex < 0) $current['equipmentGroups'][] = [];
-                    $current['equipmentGroups'][$lastGroupIndex][] = $entry;
-                } elseif (stripos($line, 'add equipmentgroup') === 0) {
+                    $current['initialWeaponSet'] = self::stripQuotes(
+                        trim(substr($line, strlen('add initialweaponset')))
+                    );
+                    continue;
+                }
+
+                if (stripos($line, 'add equipmentgroup') === 0) {
                     $current['equipmentGroups'][] = [];
+                    continue;
                 }
-            } elseif ($current && $current['type'] === 'treasuretable') {
+
+                if (stripos($line, 'add equipment entry') === 0) {
+                    $entry = self::stripQuotes(
+                        trim(substr($line, strlen('add equipment entry')))
+                    );
+                    $lastIdx = \count($current['equipmentGroups']) - 1;
+                    if ($lastIdx < 0) {
+                        $current['equipmentGroups'][] = [];
+                        $lastIdx = 0;
+                    }
+                    $current['equipmentGroups'][$lastIdx][] = $entry;
+                    continue;
+                }
+            }
+
+            // ---- Treasuretable section lines --------------------------------
+            if ($current['type'] === 'treasuretable') {
                 if (stripos($line, 'new subtable') === 0) {
-                    $weight = self::stripQuotes(trim(str_replace('new subtable', '', $line)));
-                    $current['subtables'][] = ['type' => 'subtable', 'weight' => $weight, 'items' => []];
-                } elseif (preg_match('/^object category\s+"?([^"]+)"?,\d.*$/', $line, $matches)) {
-                    $i = count($current['subtables']) - 1;
-                    if ($i >= 0) $current['subtables'][$i]['items'][] = self::stripQuotes($matches[1]);
-                } elseif (preg_match('/^(StartLevel|EndLevel)\s+"?(\d+)"?$/', $line, $matches)) {
-                    $i = count($current['subtables']) - 1;
-                    if ($i >= 0) $current['subtables'][$i][$matches[1]] = (int)$matches[2];
+                    $weight = self::stripQuotes(
+                        trim(substr($line, strlen('new subtable')))
+                    );
+                    $current['subtables'][] = [
+                        'type'   => 'subtable',
+                        'weight' => $weight,
+                        'items'  => [],
+                    ];
+                    continue;
                 }
-            } elseif ($current && in_array($current['type'], ['entry', 'equipment', 'treasuretable'])) {
-                if (preg_match('/^(data|using|type)\s+"([^"]+)"\s*"?(.*?)"?$/', $line, $matches)) {
-                    $key = $matches[1];
-                    $subkey = self::stripQuotes($matches[2]);
-                    $value = self::stripQuotes($matches[3]);
 
-                    if (!isset($current['properties'][$key])) {
-                        $current['properties'][$key] = [];
+                if (preg_match('/^object\s+category\s+"?([^"]+)"?,\d.*$/i', $line, $m)) {
+                    $i = \count($current['subtables']) - 1;
+                    if ($i >= 0) {
+                        $current['subtables'][$i]['items'][] = self::stripQuotes($m[1]);
                     }
-
-                    if ($key === 'data') {
-                        $current['properties'][$key][] = [$subkey => $value];
-                    } elseif ($key === 'using') {
-                        $current['properties'][$key][] = $subkey;
-                    } elseif ($key === 'type') {
-                        $current['properties']['declared_type'] = $subkey;
-                    }
-                } elseif (preg_match('/^(\w+)\s+"([^"]+)"$/', $line, $matches)) {
-                    $current['properties'][$matches[1]] = self::stripQuotes($matches[2]);
+                    continue;
                 }
+
+                if (preg_match('/^(StartLevel|EndLevel)\s+"?(\d+)"?$/i', $line, $m)) {
+                    $i = \count($current['subtables']) - 1;
+                    if ($i >= 0) {
+                        $current['subtables'][$i][$m[1]] = (int) $m[2];
+                    }
+                    continue;
+                }
+            }
+
+            // ---- Shared property lines --------------------------------------
+            // e.g., data "Key" "Value"  |  using "SomeId"  |  type "SomeType"
+            if (preg_match('/^(data|using|type)\s+"([^"]+)"\s*"?(.*?)"?$/i', $line, $m)) {
+                $key    = strtolower($m[1]);
+                $subkey = self::stripQuotes($m[2]);
+                $value  = self::stripQuotes($m[3]);
+
+                if (!isset($current['properties'][$key])) {
+                    $current['properties'][$key] = ($key === 'data') ? [] : (($key === 'using') ? [] : null);
+                }
+
+                if ($key === 'data') {
+                    // JSON-native: use an object map, last-writer-wins for duplicate keys
+                    $current['properties']['data'][$subkey] = $value;
+                } elseif ($key === 'using') {
+                    $current['properties']['using'][] = $subkey;
+                } elseif ($key === 'type') {
+                    $current['properties']['declared_type'] = $subkey;
+                }
+                continue;
+            }
+
+            // e.g., AnyKey "Some Value"
+            if (preg_match('/^(\w+)\s+"([^"]+)"$/', $line, $m)) {
+                $k = $m[1];
+                $v = self::stripQuotes($m[2]);
+                // If key seen multiple times, turn into array of values
+                if (!isset($current['properties'][$k])) {
+                    $current['properties'][$k] = $v;
+                } else {
+                    if (!\is_array($current['properties'][$k])) {
+                        $current['properties'][$k] = [$current['properties'][$k]];
+                    }
+                    $current['properties'][$k][] = $v;
+                }
+                continue;
             }
         }
 
-        if ($current) $result[] = $current;
-        return $result;
+        if ($current) {
+            $result[] = $current;
+        }
+
+        return json_encode(
+            $result,
+            ($pretty ? JSON_PRETTY_PRINT : 0) | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
     }
 
-    public static function string2Array(string $txt): array
+    /**
+     * Convert the JSON representation back to BG3 .txt format.
+     */
+    public static function jsonToTxt(string $json): string
     {
-        $data = file('data://text/plain,' . urlencode($txt), FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        return self::txt2Array($data);
-    }
+        $doc = json_decode($json, true);
+        if (!\is_array($doc)) {
+            throw new \InvalidArgumentException('jsonToTxt: invalid JSON document');
+        }
 
-    public static function array2Txt(array $txt): string
-    {
         $lines = [];
-        foreach ($txt as $entry) {
-            switch ($entry['type']) {
+
+        foreach ($doc as $entry) {
+            if (!\is_array($entry) || !isset($entry['type'], $entry['id'])) {
+                // skip malformed entries
+                continue;
+            }
+
+            $type = strtolower((string) $entry['type']);
+            $id   = (string) $entry['id'];
+            $props = \is_array($entry['properties'] ?? null) ? $entry['properties'] : [];
+
+            switch ($type) {
                 case 'entry':
-                    $lines[] = 'new entry "' . $entry['id'] . '"';
-                    if (isset($entry['properties']['declared_type'])) {
-                        $lines[] = 'type "' . $entry['properties']['declared_type'] . '"';
+                    $lines[] = 'new entry "' . $id . '"';
+                    if (isset($props['declared_type'])) {
+                        $lines[] = 'type "' . $props['declared_type'] . '"';
                     }
                     break;
+
                 case 'equipment':
-                    $lines[] = 'new equipment "' . $entry['id'] . '"';
-                    if ($entry['initialWeaponSet']) {
+                    $lines[] = 'new equipment "' . $id . '"';
+                    if (!empty($entry['initialWeaponSet'])) {
                         $lines[] = 'add initialweaponset "' . $entry['initialWeaponSet'] . '"';
                     }
-                    foreach ($entry['equipmentGroups'] as $group) {
+                    foreach (($entry['equipmentGroups'] ?? []) as $group) {
                         $lines[] = 'add equipmentgroup';
                         foreach ($group as $equipEntry) {
                             $lines[] = 'add equipment entry "' . $equipEntry . '"';
                         }
                     }
                     break;
+
                 case 'treasuretable':
-                    $lines[] = 'new treasuretable "' . $entry['id'] . '"';
-                    foreach ($entry['subtables'] as $sub) {
-                        $lines[] = 'new subtable "' . $sub['weight'] . '"';
-                        if (isset($sub['StartLevel'])) {
-                            $lines[] = 'StartLevel "' . $sub['StartLevel'] . '"';
-                        }
-                        if (isset($sub['EndLevel'])) {
-                            $lines[] = 'EndLevel "' . $sub['EndLevel'] . '"';
-                        }
-                        foreach ($sub['items'] as $item) {
+                    $lines[] = 'new treasuretable "' . $id . '"';
+                    foreach (($entry['subtables'] ?? []) as $sub) {
+                        $lines[] = 'new subtable "' . ($sub['weight'] ?? '') . '"';
+                        if (isset($sub['StartLevel'])) $lines[] = 'StartLevel "' . (int)$sub['StartLevel'] . '"';
+                        if (isset($sub['EndLevel']))   $lines[] = 'EndLevel "' . (int)$sub['EndLevel'] . '"';
+                        foreach (($sub['items'] ?? []) as $item) {
                             $lines[] = 'object category "' . $item . '",1';
                         }
                     }
                     break;
+
+                default:
+                    // Unknown type: still attempt to dump properties
+                    $lines[] = 'new ' . $type . ' "' . $id . '"';
+                    break;
             }
 
-            // Shared properties
-            if (!empty($entry['properties'])) {
-                foreach ($entry['properties'] as $key => $value) {
-                    if ($key === 'data' && is_array($value)) {
-                        foreach ($value as $pair) {
-                            foreach ($pair as $k => $v) {
-                                $lines[] = 'data "' . $k . '" "' . $v . '"';
-                            }
+            // Shared property serialization
+            if (!empty($props)) {
+                // data map
+                if (isset($props['data']) && \is_array($props['data'])) {
+                    foreach ($props['data'] as $k => $v) {
+                        $lines[] = 'data "' . $k . '" "' . $v . '"';
+                    }
+                    unset($props['data']);
+                }
+                // using list
+                if (isset($props['using']) && \is_array($props['using'])) {
+                    foreach ($props['using'] as $v) {
+                        $lines[] = 'using "' . $v . '"';
+                    }
+                    unset($props['using']);
+                }
+                // declared_type (already emitted for entry)
+                if (isset($props['declared_type'])) {
+                    // for other types we include it explicitly
+                    if ($type !== 'entry') {
+                        $lines[] = 'type "' . $props['declared_type'] . '"';
+                    }
+                    unset($props['declared_type']);
+                }
+                // remaining props
+                foreach ($props as $k => $v) {
+                    if (\is_array($v)) {
+                        foreach ($v as $vv) {
+                            $lines[] = $k . ' "' . $vv . '"';
                         }
-                    } elseif ($key === 'using' && is_array($value)) {
-                        foreach ($value as $v) {
-                            $lines[] = 'using "' . $v . '"';
-                        }
-                    } elseif ($key !== 'declared_type') {
-                        if (is_array($value)) {
-                            foreach ($value as $v) {
-                                $lines[] = $key . ' "' . $v . '"';
-                            }
-                        } else {
-                            $lines[] = $key . ' "' . $value . '"';
-                        }
+                    } else {
+                        $lines[] = $k . ' "' . $v . '"';
                     }
                 }
             }
 
-            $lines[] = '';
+            $lines[] = ''; // blank line between entries
         }
 
         return implode("\n", $lines);
     }
 
+    /* ------------------------------- utils ------------------------------- */
+
     private static function stripQuotes(string $str): string
     {
-        return trim($str, "\"'");
+        return trim($str, " \t\n\r\0\x0B\"'");
     }
 }
 ?>
