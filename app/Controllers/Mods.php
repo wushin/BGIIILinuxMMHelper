@@ -323,6 +323,9 @@ class Mods extends BaseController
                 if (preg_match('/\.lsf$/i', $name)) {
                     continue;
                 }
+                if (preg_match('/\.loca$/i', $name)) {
+                    continue;
+                }
 
                 $files[] = [
                     'name'  => $name,

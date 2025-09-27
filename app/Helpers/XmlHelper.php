@@ -114,22 +114,6 @@ class XmlHelper
         return $dom;
     }
 
-    /* ---------------------------- Back-compat shim ---------------------------- */
-
-    /**
-     * Backward compatibility for code that expects an array.
-     * Now implemented via createJson() so the JSON structure is the source of truth.
-     */
-    public static function createArray(string $xmlContent): array
-    {
-        $json = self::createJson($xmlContent, false);
-        $assoc = json_decode($json, true);
-        if (!is_array($assoc)) {
-            throw new \RuntimeException('Failed to convert XML to array via JSON pipeline.');
-        }
-        return $assoc;
-    }
-
     /* ------------------------------- internals ------------------------------- */
 
     private static function elementToAssoc(\DOMElement $element): array

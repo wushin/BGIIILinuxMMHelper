@@ -33,7 +33,6 @@ $renderNode = function(array $node, string $root, string $slug) use (&$renderNod
 };
 ?>
 <input type="hidden" id="path" value="<?= h($root) ?>/<?= h($slug) ?>">
-<h1 style="margin:0 0 .5rem"><?= h($slug) ?></h1>
 
 <!-- Scoped styling to indent each nested level of the tree -->
 <style>
