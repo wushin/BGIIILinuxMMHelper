@@ -120,7 +120,6 @@ class Mods extends BaseController
         $abs     = service('pathResolver')->join($rootKey, $slug . '/' . $relPath);
 
         if (is_dir($abs)) {
-            // Directory: return FULL tree for this subtree as well
             $tree = $this->buildTree($abs, $relPath);
 
             if ($this->wantsJson()) {
@@ -142,7 +141,7 @@ class Mods extends BaseController
             ]));
         }
 
-        // File
+        // --- File
         try {
             $bytes = service('contentService')->read($abs);
         } catch (\Throwable $e) {
@@ -153,6 +152,7 @@ class Mods extends BaseController
         $kind = $this->kindFromExt($ext);
 
         $payload = null;
+        $summary = null;
 
         switch ($kind) {
             case 'txt':
@@ -165,16 +165,37 @@ class Mods extends BaseController
                 break;
 
             case 'lsx':
+                // LSX: detect region + group, parse with handle map to enrich TranslatedString attrs.text
+                $region = $this->detectRegionFromHead($bytes) ?? 'unknown';
+                $regionGroup = $this->regionGroupFromId($region);
+
                 $scanner   = new LocalizationScanner(true, false);
                 $langXmls  = $scanner->findLocalizationXmlsForMod(service('pathResolver')->join($rootKey, $slug));
                 $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+
                 $jsonTree  = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
                 $payload   = json_decode($jsonTree, true);
+
+                $summary = ['region' => $region, 'regionGroup' => $regionGroup];
                 break;
 
             case 'image':
+                if ($ext === 'dds') {
+                    // Convert DDS → PNG so browsers can render it
+                    $uri = $this->ddsToPngDataUri($abs);
+                    if ($uri) {
+                        $payload = ['dataUri' => $uri, 'converted' => true, 'from' => 'dds'];
+                        break;
+                    }
+                    // If conversion failed, we still return the raw bytes (frontend will show a hint)
+                    $payload = ['dataUri' => null, 'converted' => false, 'from' => 'dds'];
+                    break;
+                }
+
+                // Other formats we can show directly
                 $payload = [
                     'dataUri' => 'data:' . $this->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
+                    'converted' => false,
                 ];
                 break;
 
@@ -184,22 +205,22 @@ class Mods extends BaseController
         }
 
         if ($this->wantsJson()) {
-            // Include raw text for txt/xml/lsx too, so middle column can display source when desired.
             $rawOut = in_array($kind, ['txt','khn','xml','lsx','unknown'], true) ? $bytes : null;
-
             return $this->response->setJSON([
-                'ok'     => true,
-                'root'   => $rootKey,
-                'slug'   => $slug,
-                'path'   => $relPath,
-                'ext'    => $ext,
-                'kind'   => $kind,
-                'result' => $payload,
-                'raw'    => $rawOut,
+                'ok'           => true,
+                'root'         => $rootKey,
+                'slug'         => $slug,
+                'path'         => $relPath,
+                'ext'          => $ext,
+                'kind'         => $kind,
+                'result'       => $payload,
+                'raw'          => $rawOut,
+                'region'       => $summary['region']      ?? null,
+                'regionGroup'  => $summary['regionGroup'] ?? null,
             ]);
         }
 
-        // HTML file view (unchanged)
+        // HTML view (not typically used for inline; browse.php handles inline rendering)
         return $this->response->setBody(view('mods/file', [
             'pageTitle' => "{$slug}",
             'root'      => $rootKey,
@@ -242,7 +263,7 @@ class Mods extends BaseController
                         $payload = XmlHelper::createXML('contentList', $assoc)->saveXML();
                         break;
                     case 'lsx':
-                        // Expect raw XML; if JSON provided, store it as JSON text
+                        // Expect raw XML; if JSON provided, store as JSON text
                         $payload = $raw ?? json_encode(json_decode($dataJson, true), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
                         break;
                     default:
@@ -298,6 +319,7 @@ class Mods extends BaseController
     /**
      * Build a fully-recursive tree for the given absolute path.
      * Each node: { name, isDir, ext?, rel, children?[] }
+     * Ignores pure *.lsf files (binary), but keeps *.lsf.lsx.
      */
     private function buildTree(string $abs, string $baseRel): array
     {
@@ -319,14 +341,13 @@ class Mods extends BaseController
                     'children' => $this->buildTree($p, $rel),
                 ];
             } else {
-                // Ignore *pure* .lsf files (binary), but DO NOT ignore .lsf.lsx
+                // Ignore *pure* .lsf files (but NOT .lsf.lsx)
                 if (preg_match('/\.lsf$/i', $name)) {
                     continue;
                 }
                 if (preg_match('/\.loca$/i', $name)) {
                     continue;
                 }
-
                 $files[] = [
                     'name'  => $name,
                     'isDir' => false,
@@ -346,7 +367,7 @@ class Mods extends BaseController
     {
         $out = [];
         foreach (scandir($base) ?: [] as $name) {
-            if ($name === '.' || $name === '..') continue;
+            if ($name === '.' || $name === '..' || $name[0] === '.') continue; // hide dot dirs like .git
             $abs = $base . DIRECTORY_SEPARATOR . $name;
             if (is_dir($abs)) {
                 $out[] = ['slug' => $name, 'mtime' => @filemtime($abs) ?: null];
@@ -385,7 +406,7 @@ class Mods extends BaseController
         if (!$base || !is_dir($base)) return 0;
         $n = 0;
         foreach (scandir($base) ?: [] as $name) {
-            if ($name === '.' || $name === '..') continue;
+            if ($name === '.' || $name === '..' || $name[0] === '.') continue;
             if (is_dir($base . DIRECTORY_SEPARATOR . $name)) $n++;
         }
         return $n;
@@ -400,5 +421,104 @@ class Mods extends BaseController
             view('mods/error', ['pageTitle' => 'Not Found', 'message' => $msg])
         );
     }
+
+    /** Peek <region id="..."> from first ~8KB of LSX */
+    private function detectRegionFromHead(string $xml, int $bytes = 8192): ?string
+    {
+        $head = substr($xml, 0, $bytes);
+        if ($head === '') return null;
+        if (preg_match('/<region\s+id\s*=\s*"([^"]+)"/i', $head, $m)) {
+            return $m[1];
+        }
+        return null;
+    }
+
+    /** Bucket region ids into broader groups for UI branching */
+    private function regionGroupFromId(string $region): string
+    {
+        switch ($region) {
+            // Dialog-ish
+            case 'dialog':
+            case 'DialogBank':
+            case 'TimelineBank':
+            case 'TimelineContent':
+            case 'TLScene':
+                return 'dialog';
+
+            // Gameplay/data
+            case 'AbilityDistributionPresets':
+            case 'ActionResourceDefinitions':
+            case 'Backgrounds':
+            case 'CharacterCreationAppearanceVisuals':
+            case 'CharacterCreationPresets':
+            case 'ClassDescriptions':
+            case 'ConditionErrors':
+            case 'DefaultValues':
+            case 'Effect':
+            case 'EffectBank':
+            case 'EnterPhaseSoundEvents':
+            case 'EnterSoundEvents':
+            case 'EquipmentLists':
+            case 'ExitPhaseSoundEvents':
+            case 'ExitSoundEvents':
+            case 'FactionContainer':
+            case 'FactionManager':
+            case 'Flags':
+            case 'LevelMapValues':
+            case 'MultiEffectInfos':
+            case 'Origins':
+            case 'PassiveLists':
+            case 'ProgressionDescriptions':
+            case 'Progressions':
+            case 'Races':
+            case 'SkillLists':
+            case 'SpellLists':
+            case 'Tags':
+            case 'Templates':
+            case 'TooltipExtraTexts':
+                return 'gameplay';
+
+            // Assets/visual
+            case 'TextureBank':
+            case 'TextureAtlasInfo':
+            case 'MaterialBank':
+            case 'CharacterVisualBank':
+            case 'VisualBank':
+            case 'IconUVList':
+                return 'assets';
+
+            // Core/meta
+            case 'Config':
+            case 'Dependencies':
+            case 'MetaData':
+                return 'meta';
+
+            default:
+                return 'unknown';
+        }
+    }
+
+    /**
+     * Convert a DDS file to PNG and return a data URI. Requires Imagick with DDS support.
+     */
+    private function ddsToPngDataUri(string $absPath): ?string
+    {
+        try {
+            if (!class_exists('\Imagick')) {
+                return null;
+            }
+            $img = new \Imagick();
+            $img->readImage($absPath);     // relies on Imagick delegates (e.g., FreeImage) to read DDS
+            $img->setImageFormat('png');
+            $blob = $img->getImageBlob();
+            if (!$blob) {
+                return null;
+            }
+            return 'data:image/png;base64,' . base64_encode($blob);
+        } catch (\Throwable $e) {
+            return null; // quietly fall back; frontend will show a hint
+        }
+    }
+
 }
 ?>
