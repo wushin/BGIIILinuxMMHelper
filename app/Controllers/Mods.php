@@ -27,19 +27,22 @@ use App\Libraries\LocalizationScanner;
 
 class Mods extends BaseController
 {
-    // -------- GET /mods
+    /* ======================== ROUTES ======================== */
+
+    // GET /mods  → roots summary (HTML or JSON)
     public function list(): ResponseInterface
     {
         $paths = service('pathResolver');
-        $roots = [
+
+        $rootsAbs = [
             'MyMods'       => $paths->myMods(),
             'UnpackedMods' => $paths->unpackedMods(),
             'GameData'     => $paths->gameData(),
         ];
 
         $summary = [];
-        foreach ($roots as $name => $abs) {
-            $summary[$name] = [
+        foreach ($rootsAbs as $key => $abs) {
+            $summary[$key] = [
                 'configured' => is_string($abs) && $abs !== '' && is_dir($abs),
                 'path'       => $abs ?: null,
                 'count'      => $this->countDirs($abs),
@@ -56,7 +59,7 @@ class Mods extends BaseController
         ]));
     }
 
-    // -------- GET /mods/{Root}
+    // GET /mods/{Root} → list mod directories (HTML or JSON)
     public function listRoot(string $root): ResponseInterface
     {
         $rootKey = $this->normalizeRoot($root);
@@ -68,11 +71,7 @@ class Mods extends BaseController
         $mods = $this->listDirs($base);
 
         if ($this->wantsJson()) {
-            return $this->response->setJSON([
-                'ok'   => true,
-                'root' => $rootKey,
-                'mods' => $mods,
-            ]);
+            return $this->response->setJSON(['ok' => true, 'root' => $rootKey, 'mods' => $mods]);
         }
 
         return $this->response->setBody(view('mods/mods', [
@@ -82,24 +81,22 @@ class Mods extends BaseController
         ]));
     }
 
-    // -------- GET /mods/{Root}/{slug}  (left column = FULL TREE)
+    // GET /mods/{Root}/{slug} → full recursive tree (left column)
     public function mod(string $root, string $slug): ResponseInterface
     {
         $rootKey = $this->normalizeRoot($root);
         $abs     = service('pathResolver')->join($rootKey, $slug);
-        if (!is_dir($abs)) {
-            return $this->notFound('Mod not found');
-        }
+        if (!is_dir($abs)) return $this->notFound('Mod not found');
 
-        $tree = $this->buildTree($abs, '');
+        $tree = service('directoryScanner')->tree($abs, '');
 
         if ($this->wantsJson()) {
             return $this->response->setJSON([
-                'ok'    => true,
-                'root'  => $rootKey,
-                'slug'  => $slug,
-                'path'  => '',
-                'tree'  => $tree,
+                'ok'   => true,
+                'root' => $rootKey,
+                'slug' => $slug,
+                'path' => '',
+                'tree' => $tree,
             ]);
         }
 
@@ -112,23 +109,23 @@ class Mods extends BaseController
         ]));
     }
 
-    // -------- GET /mods/{Root}/{slug}/{path...} (dir or file)
+    // GET /mods/{Root}/{slug}/{path...} → directory (tree) or file (content)
     public function view(string $root, string $slug, string $relPath): ResponseInterface
     {
         $rootKey = $this->normalizeRoot($root);
         $relPath = ltrim($relPath, '/');
-        $abs     = service('pathResolver')->join($rootKey, $slug . '/' . $relPath);
+        $abs     = service('pathResolver')->join($rootKey, $slug . ($relPath ? '/' . $relPath : ''));
 
         if (is_dir($abs)) {
-            $tree = $this->buildTree($abs, $relPath);
+            $tree = service('directoryScanner')->tree($abs, $relPath);
 
             if ($this->wantsJson()) {
                 return $this->response->setJSON([
-                    'ok'    => true,
-                    'root'  => $rootKey,
-                    'slug'  => $slug,
-                    'path'  => $relPath,
-                    'tree'  => $tree,
+                    'ok'   => true,
+                    'root' => $rootKey,
+                    'slug' => $slug,
+                    'path' => $relPath,
+                    'tree' => $tree,
                 ]);
             }
 
@@ -141,62 +138,58 @@ class Mods extends BaseController
             ]));
         }
 
-        // --- File
+        // File
         try {
             $bytes = service('contentService')->read($abs);
         } catch (\Throwable $e) {
             return $this->notFound('File not found');
         }
 
-        $ext  = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-        $kind = $this->kindFromExt($ext);
+        $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+        $kinds = service('mimeGuesser');
+        $kind  = $kinds->kindFromExt($ext);
 
         $payload = null;
-        $summary = null;
+        $meta    = [];
 
         switch ($kind) {
             case 'txt':
             case 'khn':
-                $payload = json_decode(TextParserHelper::txtToJson($bytes, true), true);
+                $payload = $this->tryTxtToJson($bytes);
                 break;
 
             case 'xml':
-                $payload = json_decode(XmlHelper::createJson($bytes, true), true);
+                $payload = $this->tryXmlToJson($bytes);
                 break;
 
-            case 'lsx':
-                // LSX: detect region + group, parse with handle map to enrich TranslatedString attrs.text
-                $region = $this->detectRegionFromHead($bytes) ?? 'unknown';
-                $regionGroup = $this->regionGroupFromId($region);
-
+            case 'lsx': {
+                // Detect region + group and parse with handle-map enrichment
+                $modAbs    = service('pathResolver')->join($rootKey, $slug);
                 $scanner   = new LocalizationScanner(true, false);
-                $langXmls  = $scanner->findLocalizationXmlsForMod(service('pathResolver')->join($rootKey, $slug));
+                $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
                 $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
 
-                $jsonTree  = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
-                $payload   = json_decode($jsonTree, true);
+                $region      = $this->detectRegionFromHead($bytes) ?? 'unknown';
+                $regionGroup = $this->regionGroupFromId($region);
 
-                $summary = ['region' => $region, 'regionGroup' => $regionGroup];
+                $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
+                $payload  = json_decode($jsonTree, true);
+
+                $meta['region']      = $region;
+                $meta['regionGroup'] = $regionGroup;
                 break;
+            }
 
             case 'image':
                 if ($ext === 'dds') {
-                    // Convert DDS → PNG so browsers can render it
-                    $uri = $this->ddsToPngDataUri($abs);
-                    if ($uri) {
-                        $payload = ['dataUri' => $uri, 'converted' => true, 'from' => 'dds'];
-                        break;
-                    }
-                    // If conversion failed, we still return the raw bytes (frontend will show a hint)
-                    $payload = ['dataUri' => null, 'converted' => false, 'from' => 'dds'];
-                    break;
+                    $uri = service('imageTransformer')->ddsToPngDataUri($abs);
+                    $payload = ['dataUri' => $uri, 'converted' => (bool)$uri, 'from' => 'dds'];
+                } else {
+                    $payload = [
+                        'dataUri'   => 'data:' . $kinds->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
+                        'converted' => false,
+                    ];
                 }
-
-                // Other formats we can show directly
-                $payload = [
-                    'dataUri' => 'data:' . $this->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
-                    'converted' => false,
-                ];
                 break;
 
             default:
@@ -206,21 +199,22 @@ class Mods extends BaseController
 
         if ($this->wantsJson()) {
             $rawOut = in_array($kind, ['txt','khn','xml','lsx','unknown'], true) ? $bytes : null;
+
             return $this->response->setJSON([
-                'ok'           => true,
-                'root'         => $rootKey,
-                'slug'         => $slug,
-                'path'         => $relPath,
-                'ext'          => $ext,
-                'kind'         => $kind,
-                'result'       => $payload,
-                'raw'          => $rawOut,
-                'region'       => $summary['region']      ?? null,
-                'regionGroup'  => $summary['regionGroup'] ?? null,
+                'ok'          => true,
+                'root'        => $rootKey,
+                'slug'        => $slug,
+                'path'        => $relPath,
+                'ext'         => $ext,
+                'kind'        => $kind,
+                'result'      => $payload,
+                'raw'         => $rawOut,
+                'region'      => $meta['region']      ?? null,
+                'regionGroup' => $meta['regionGroup'] ?? null,
             ]);
         }
 
-        // HTML view (not typically used for inline; browse.php handles inline rendering)
+        // HTML view fallback (inline rendering is normally in browse.php)
         return $this->response->setBody(view('mods/file', [
             'pageTitle' => "{$slug}",
             'root'      => $rootKey,
@@ -233,50 +227,27 @@ class Mods extends BaseController
         ]));
     }
 
-    // -------- POST /mods/{Root}/{slug}/file/{path...}
+    // POST /mods/{Root}/{slug}/file/{path...} → save
     public function save(string $root, string $slug, string $relPath): ResponseInterface
     {
         try {
             $rootKey = $this->normalizeRoot($root);
             $relPath = ltrim($relPath, '/');
-            $abs     = service('pathResolver')->join($rootKey, $slug . '/' . $relPath);
+            $abs     = service('pathResolver')->join($rootKey, $slug . ($relPath ? '/' . $relPath : ''));
 
             $raw      = $this->request->getPost('data');       // optional raw text
             $dataJson = $this->request->getPost('data_json');  // optional JSON string
-            $ext      = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-            $kind     = $this->kindFromExt($ext);
 
-            $payload = (string) ($raw ?? '');
+            $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+            $kind  = service('mimeGuesser')->kindFromExt($ext);
+            $bytes = $this->composePayloadForWrite($kind, $raw, $dataJson);
 
-            if (is_string($dataJson) && $dataJson !== '') {
-                switch ($kind) {
-                    case 'txt':
-                    case 'khn':
-                        $payload = TextParserHelper::jsonToTxt($dataJson);
-                        break;
-                    case 'xml':
-                        $assoc = json_decode($dataJson, true);
-                        if (!is_array($assoc)) throw new \InvalidArgumentException('data_json must be valid JSON');
-                        if (count($assoc) === 1 && isset($assoc[array_key_first($assoc)])) {
-                            $assoc = $assoc[array_key_first($assoc)];
-                        }
-                        $payload = XmlHelper::createXML('contentList', $assoc)->saveXML();
-                        break;
-                    case 'lsx':
-                        // Expect raw XML; if JSON provided, store as JSON text
-                        $payload = $raw ?? json_encode(json_decode($dataJson, true), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                        break;
-                    default:
-                        $payload = (string) ($raw ?? $dataJson);
-                }
-            }
-
-            service('contentService')->write($abs, $payload, true);
+            service('contentService')->write($abs, $bytes, true);
 
             return $this->response->setJSON([
                 'ok'    => true,
                 'path'  => $abs,
-                'bytes' => strlen($payload),
+                'bytes' => strlen($bytes),
                 'ext'   => $ext,
                 'kind'  => $kind,
                 'from'  => is_string($dataJson) && $dataJson !== '' ? 'json' : 'raw',
@@ -286,7 +257,7 @@ class Mods extends BaseController
         }
     }
 
-    /* ==================== helpers ==================== */
+    /* ======================== HELPERS ======================== */
 
     private function wantsJson(): bool
     {
@@ -316,89 +287,14 @@ class Mods extends BaseController
         };
     }
 
-    /**
-     * Build a fully-recursive tree for the given absolute path.
-     * Each node: { name, isDir, ext?, rel, children?[] }
-     * Ignores pure *.lsf files (binary), but keeps *.lsf.lsx.
-     */
-    private function buildTree(string $abs, string $baseRel): array
+    private function notFound(string $msg): ResponseInterface
     {
-        $entries = @scandir($abs) ?: [];
-        $dirs = [];
-        $files = [];
-
-        foreach ($entries as $name) {
-            if ($name === '.' || $name === '..') continue;
-
-            $p   = $abs . DIRECTORY_SEPARATOR . $name;
-            $rel = ltrim($baseRel . '/' . $name, '/');
-
-            if (is_dir($p)) {
-                $dirs[] = [
-                    'name'     => $name,
-                    'isDir'    => true,
-                    'rel'      => $rel . '/',
-                    'children' => $this->buildTree($p, $rel),
-                ];
-            } else {
-                // Ignore *pure* .lsf files (but NOT .lsf.lsx)
-                if (preg_match('/\.lsf$/i', $name)) {
-                    continue;
-                }
-                if (preg_match('/\.loca$/i', $name)) {
-                    continue;
-                }
-                $files[] = [
-                    'name'  => $name,
-                    'isDir' => false,
-                    'ext'   => strtolower(pathinfo($name, PATHINFO_EXTENSION)),
-                    'rel'   => $rel,
-                ];
-            }
+        if ($this->wantsJson()) {
+            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'error' => $msg]);
         }
-
-        usort($dirs,  fn($a,$b)=> strcasecmp($a['name'],$b['name']));
-        usort($files, fn($a,$b)=> strcasecmp($a['name'],$b['name']));
-
-        return array_merge($dirs, $files);
-    }
-
-    private function listDirs(string $base): array
-    {
-        $out = [];
-        foreach (scandir($base) ?: [] as $name) {
-            if ($name === '.' || $name === '..' || $name[0] === '.') continue; // hide dot dirs like .git
-            $abs = $base . DIRECTORY_SEPARATOR . $name;
-            if (is_dir($abs)) {
-                $out[] = ['slug' => $name, 'mtime' => @filemtime($abs) ?: null];
-            }
-        }
-        usort($out, fn($a, $b) => strcasecmp($a['slug'], $b['slug']));
-        return $out;
-    }
-
-    private function kindFromExt(string $ext): string
-    {
-        return match ($ext) {
-            'txt'        => 'txt',
-            'khn'        => 'khn',
-            'xml'        => 'xml',
-            'lsx'        => 'lsx',
-            'png','jpg','jpeg','gif','webp','dds' => 'image',
-            default      => 'unknown',
-        };
-    }
-
-    private function mimeFromExt(string $ext): string
-    {
-        return match ($ext) {
-            'png'  => 'image/png',
-            'jpg','jpeg' => 'image/jpeg',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp',
-            'dds'  => 'application/octet-stream',
-            default=> 'text/plain',
-        };
+        return $this->response->setStatusCode(404)->setBody(
+            view('mods/error', ['pageTitle' => 'Not Found', 'message' => $msg])
+        );
     }
 
     private function countDirs(?string $base): int
@@ -412,32 +308,19 @@ class Mods extends BaseController
         return $n;
     }
 
-    private function notFound(string $msg): ResponseInterface
-    {
-        if ($this->wantsJson()) {
-            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'error' => $msg]);
-        }
-        return $this->response->setStatusCode(404)->setBody(
-            view('mods/error', ['pageTitle' => 'Not Found', 'message' => $msg])
-        );
-    }
-
-    /** Peek <region id="..."> from first ~8KB of LSX */
+    /** Peek <region id="..."> from first ~8KB of LSX (string) */
     private function detectRegionFromHead(string $xml, int $bytes = 8192): ?string
     {
         $head = substr($xml, 0, $bytes);
         if ($head === '') return null;
-        if (preg_match('/<region\s+id\s*=\s*"([^"]+)"/i', $head, $m)) {
-            return $m[1];
-        }
+        if (preg_match('/<region\s+id\s*=\s*"([^"]+)"/i', $head, $m)) return $m[1];
         return null;
     }
 
-    /** Bucket region ids into broader groups for UI branching */
+    /** Map region → group (dialog/gameplay/assets/meta/unknown) */
     private function regionGroupFromId(string $region): string
     {
         switch ($region) {
-            // Dialog-ish
             case 'dialog':
             case 'DialogBank':
             case 'TimelineBank':
@@ -445,7 +328,6 @@ class Mods extends BaseController
             case 'TLScene':
                 return 'dialog';
 
-            // Gameplay/data
             case 'AbilityDistributionPresets':
             case 'ActionResourceDefinitions':
             case 'Backgrounds':
@@ -478,7 +360,6 @@ class Mods extends BaseController
             case 'TooltipExtraTexts':
                 return 'gameplay';
 
-            // Assets/visual
             case 'TextureBank':
             case 'TextureAtlasInfo':
             case 'MaterialBank':
@@ -487,7 +368,6 @@ class Mods extends BaseController
             case 'IconUVList':
                 return 'assets';
 
-            // Core/meta
             case 'Config':
             case 'Dependencies':
             case 'MetaData':
@@ -498,27 +378,53 @@ class Mods extends BaseController
         }
     }
 
-    /**
-     * Convert a DDS file to PNG and return a data URI. Requires Imagick with DDS support.
-     */
-    private function ddsToPngDataUri(string $absPath): ?string
+    private function tryTxtToJson(string $bytes): array
     {
         try {
-            if (!class_exists('\Imagick')) {
-                return null;
-            }
-            $img = new \Imagick();
-            $img->readImage($absPath);     // relies on Imagick delegates (e.g., FreeImage) to read DDS
-            $img->setImageFormat('png');
-            $blob = $img->getImageBlob();
-            if (!$blob) {
-                return null;
-            }
-            return 'data:image/png;base64,' . base64_encode($blob);
-        } catch (\Throwable $e) {
-            return null; // quietly fall back; frontend will show a hint
+            $json = TextParserHelper::txtToJson($bytes, true); // pretty
+            $arr  = json_decode($json, true);
+            return is_array($arr) ? $arr : ['raw' => $bytes];
+        } catch (\Throwable $__) {
+            return ['raw' => $bytes];
         }
     }
 
+    private function tryXmlToJson(string $bytes): array
+    {
+        try {
+            $json = XmlHelper::createJson($bytes, true); // pretty
+            $arr  = json_decode($json, true);
+            return is_array($arr) ? $arr : ['raw' => $bytes];
+        } catch (\Throwable $__) {
+            return ['raw' => $bytes];
+        }
+    }
+
+    private function composePayloadForWrite(string $kind, ?string $raw, ?string $dataJson): string
+    {
+        // Prefer JSON when provided; fall back to raw
+        if (is_string($dataJson) && $dataJson !== '') {
+            switch ($kind) {
+                case 'txt':
+                case 'khn':
+                    return TextParserHelper::jsonToTxt($dataJson);
+                case 'xml': {
+                    // JSON must be an object with a single root
+                    $assoc = json_decode($dataJson, true);
+                    if (!is_array($assoc)) throw new \InvalidArgumentException('data_json must be valid JSON');
+                    if (count($assoc) === 1 && isset($assoc[array_key_first($assoc)])) {
+                        $assoc = $assoc[array_key_first($assoc)];
+                    }
+                    return XmlHelper::createXML('contentList', $assoc)->saveXML();
+                }
+                case 'lsx':
+                    // For LSX we currently accept raw XML; if JSON provided, store as JSON text
+                    return (string) ($raw ?? $dataJson);
+                default:
+                    return (string) ($raw ?? $dataJson);
+            }
+        }
+        return (string) ($raw ?? '');
+    }
 }
-?>
+

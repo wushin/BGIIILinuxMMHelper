@@ -32,12 +32,6 @@ class Services extends BaseService
         return new \App\Services\DirectoryScanner();
     }
 
-    public static function mimeGuesser(bool $getShared = true)
-    {
-        if ($getShared) return static::getSharedInstance('mimeGuesser');
-        return new \App\Services\MimeGuesser(config(FileKinds::class));
-    }
-
     public static function lsxService(bool $getShared = true)
     {
         if ($getShared) return static::getSharedInstance('lsxService');
@@ -56,6 +50,12 @@ class Services extends BaseService
     {
         if ($getShared) return static::getSharedInstance('responseBuilder');
         return new \App\Services\ResponseBuilder(service('response'));
+    }
+
+    public static function mimeGuesser(bool $getShared = true)
+    {
+        if ($getShared) return static::getSharedInstance('mimeGuesser');
+        return new \App\Services\MimeGuesser(config(\Config\FileKinds::class));
     }
 }
 ?>

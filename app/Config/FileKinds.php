@@ -4,8 +4,8 @@ namespace Config;
 use CodeIgniter\Config\BaseConfig;
 
 /**
- * Extension → { kind, mime }
- * Add/edit here without touching PHP logic.
+ * Single source of truth for extension → {kind, mime}.
+ * Edit this file to add/override types; no duplication elsewhere.
  */
 class FileKinds extends BaseConfig
 {
