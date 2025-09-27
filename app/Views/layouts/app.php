@@ -20,7 +20,7 @@ $title = $title ?? 'BG3 Linux Helper';
 
     header { height:var(--header-h); display:flex; align-items:center; background:var(--panel);
              border-bottom:1px solid var(--border); padding:0 12px; box-sizing:border-box; }
-    .hdr-wrap { max-width:1600px; margin:0 auto; width:100%; display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:12px; }
+    .hdr-wrap { margin:0 auto; width:100%; display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:12px; }
     .hdr-left  { display:flex; gap:8px; align-items:center; }
     .hdr-mid   { text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .hdr-right { display:flex; gap:8px; justify-content:flex-end; align-items:center; }
