@@ -23,7 +23,7 @@ class Services extends BaseService
     public static function pathResolver(bool $getShared = true)
     {
         if ($getShared) return static::getSharedInstance('pathResolver');
-        return new \App\Services\PathResolver(config(BG3Paths::class));
+        return new \App\Services\PathResolver();
     }
 
     public static function directoryScanner(bool $getShared = true)

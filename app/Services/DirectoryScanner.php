@@ -2,22 +2,31 @@
 namespace App\Services;
 
 /**
- * Recursively builds a directory tree: dirs first, sorted A→Z.
- * Ignores dot entries and pure ".lsf" files (keeps ".lsf.lsx").
+ * Recursively builds a directory tree: dirs first, A→Z.
+ * - Skips dot entries.
+ * - Ignores pure ".lsf" files (keeps ".lsf.lsx").
  */
 class DirectoryScanner
 {
     /**
-     * @return array{name:string,isDir:bool,rel:string,ext?:string,children?:array[]}[]
+     * @return array<int, array{
+     *   name:string,
+     *   isDir:bool,
+     *   rel:string,
+     *   ext?:string,
+     *   children?:array
+     * }>
      */
     public function tree(string $abs, string $baseRel = ''): array
     {
         $entries = @scandir($abs) ?: [];
-        $dirs = [];
+        $dirs  = [];
         $files = [];
 
         foreach ($entries as $name) {
-            if ($name === '.' || $name === '..' || $name[0] === '.') continue;
+            if ($name === '.' || $name === '..' || $name[0] === '.') {
+                continue;
+            }
 
             $p   = $abs . DIRECTORY_SEPARATOR . $name;
             $rel = ltrim($baseRel . '/' . $name, '/');
@@ -33,7 +42,12 @@ class DirectoryScanner
             }
 
             // Ignore pure .lsf (binary), not .lsf.lsx
-            if (preg_match('/\.lsf$/i', $name)) continue;
+            if (preg_match('/\.lsf$/i', $name)) {
+                continue;
+            }
+            if (preg_match('/\.loca$/i', $name)) {
+                continue;
+            }
 
             $files[] = [
                 'name'  => $name,

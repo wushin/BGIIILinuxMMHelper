@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Services\ContentService;
+use App\Services\PathResolver;
 use Config\BG3Paths;
 
 /**
