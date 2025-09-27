@@ -16,7 +16,7 @@ function renderTree(array $nodes, int $depth = 0) {
         $cls = $isDir ? 'node dir' : 'node file ext-'.htmlspecialchars($ext);
         echo '<div class="'.$cls.'" data-rel="'.htmlspecialchars($rel).'" style="margin-left:'.$indent.'px">';
         echo $isDir ? '📁 ' : '📄 ';
-        echo htmlspecialchars($name);
+        echo '<span class="node-label" data-name="'.htmlspecialchars($name).'">'.htmlspecialchars($name).'</span>';
         echo '</div>';
 
         if ($isDir && !empty($n['children']) && is_array($n['children'])) {
@@ -30,28 +30,61 @@ function renderTree(array $nodes, int $depth = 0) {
 
 <?= $this->section('head') ?>
 <style>
-  :root { --sidebar-w: 360px; }
-  /* Fixed LEFT sidebar below the shared header */
-  .sidebar {
-    position: fixed; top: var(--header-h); left: 0; width: var(--sidebar-w);
-    height: calc(100vh - var(--header-h));
-    background: #0d1117; border-right:1px solid #21262d;
-    overflow: auto; white-space: nowrap; box-sizing: border-box;
+  :root { --side-w: 380px; --details-w: 340px; }
+
+  /* Keep .mod-wrap aligned to <main> by nesting it in .wrap (below) */
+  .mod-wrap { padding: 0; margin: 0; } /* .wrap supplies the outer padding/width */
+  .columns3 {
+    width: 100%;
+    margin: 0;
+    display: grid;
+    grid-template-columns: var(--side-w) minmax(0, 1fr) var(--details-w);
+    gap: 12px;
   }
-  .sidebar .head { position: sticky; top:0; background:#0d1117; border-bottom:1px solid #21262d; padding:.6rem .8rem; font-weight:600; }
-  .sidebar .body { padding:.6rem .4rem .8rem; }
+
+  .panel {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: .5rem;
+    height: calc(100vh - var(--header-h));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel > .head {
+    padding: .6rem .8rem;
+    border-bottom: 1px solid #21262d;
+    font-weight: 600;
+    flex: 0 0 auto;
+  }
+  .panel > .body {
+    padding: .8rem;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+
+  .tree-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+  }
+  .tree-title { color: #c9d1d9; }
+  .toggle-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    background:#161b22; border:1px solid #30363d; color:#c9d1d9;
+    padding:.25rem .6rem; border-radius:.35rem; cursor:pointer;
+    font-size:.85rem; line-height:1; min-width:2rem; user-select:none;
+  }
+  .toggle-btn:hover{ background:#1f2630; }
+
   .node { padding:.2rem .4rem; border-radius:.25rem; cursor:pointer; user-select:none; }
   .node:hover { background:#161b22; }
   .node.dir { color:#c9d1d9; }
   .node.file { color:#a5d6ff; }
   .node.highlight { background:#14324a; outline:1px solid #1f6feb; }
+  .node-label { display:inline-block; }
 
-  /* Main content to the right of sidebar */
-  .mod-layout { margin-left: var(--sidebar-w); padding:12px; box-sizing:border-box; }
-  .columns { max-width:1600px; margin:0 auto; display:grid; grid-template-columns: 1fr 320px; gap:12px; }
-  .panel { background:#0d1117; border:1px solid #21262d; border-radius:.5rem; height: calc(100vh - var(--header-h) - 24px); overflow:auto; box-sizing: border-box; display:flex; flex-direction:column; }
-  .panel > .head { padding:.6rem .8rem; border-bottom:1px solid #21262d; font-weight:600; }
-  .panel > .body { padding:.8rem; flex:1 1 auto; overflow:auto; }
   .muted { color:#8b949e; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
   img.dynImg { max-width:100%; height:auto; display:block; }
@@ -63,29 +96,37 @@ function renderTree(array $nodes, int $depth = 0) {
 
 <?= $this->section('content') ?>
 
-<!-- FIXED LEFT SIDEBAR -->
-<aside class="sidebar">
-  <div class="head">Files &amp; Folders (all depths)</div>
-  <div class="body" id="tree">
-    <?php renderTree($tree, 0); ?>
-  </div>
-</aside>
+<!-- Use the global .wrap so mod-wrap matches <main>'s width/padding -->
+<div class="wrap">
+  <div class="mod-wrap" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>">
+    <div class="columns3">
+      <!-- LEFT -->
+      <aside class="panel" id="treePanel">
+        <div class="head tree-head" id="treeHead">
+          <span class="tree-title" id="treeTitle">Files &amp; Folders (all depths)</span>
+          <button class="toggle-btn" id="btnToggleTree" type="button" title="Collapse/Expand">⇔</button>
+        </div>
+        <div class="body" id="tree">
+          <?php renderTree($tree, 0); ?>
+        </div>
+      </aside>
 
-<!-- MAIN CONTENT TO THE RIGHT -->
-<div class="mod-layout" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>">
-  <div class="columns">
-    <section class="panel">
-      <div class="head">Viewer</div>
-      <div class="body" id="viewer">
-        <p class="muted">Select a file to preview here.</p>
-      </div>
-    </section>
-    <aside class="panel">
-      <div class="head">Details</div>
-      <div class="body" id="meta">
-        <div class="muted">Region, type, and other metadata will appear here.</div>
-      </div>
-    </aside>
+      <!-- CENTER -->
+      <section class="panel">
+        <div class="head">Viewer</div>
+        <div class="body" id="viewer">
+          <p class="muted">Select a file to preview here.</p>
+        </div>
+      </section>
+
+      <!-- RIGHT -->
+      <aside class="panel">
+        <div class="head">Details</div>
+        <div class="body" id="meta">
+          <div class="muted">Region, type, and other metadata will appear here.</div>
+        </div>
+      </aside>
+    </div>
   </div>
 </div>
 
@@ -155,14 +196,12 @@ function renderTree(array $nodes, int $depth = 0) {
     }
   }
 
-  // File open
   tree.addEventListener('click', (e) => {
     const el = e.target.closest('.node');
     if (!el || el.classList.contains('dir')) return;
     openRel(el.getAttribute('data-rel') || '');
   });
 
-  // Highlight helper for Fetch UUID widgets
   function clearHighlights() {
     document.querySelectorAll('.node.highlight').forEach(n=> n.classList.remove('highlight'));
   }
@@ -176,10 +215,61 @@ function renderTree(array $nodes, int $depth = 0) {
       hit.scrollIntoView({ block: 'center' });
     }
   }
-
-  // Listen to layout header events
   document.addEventListener('app:fetch-uuid', (e)=> highlightAndScroll(e.detail?.value || ''));
   document.addEventListener('app:fetch-contentuuid', (e)=> highlightAndScroll(e.detail?.value || ''));
+
+  // Auto-size left column + collapse/expand
+  const treePanel = document.getElementById('treePanel');
+  const treeHead  = document.getElementById('treeHead');
+  const treeTitle = document.getElementById('treeTitle');
+  const toggleBtn = document.getElementById('btnToggleTree');
+
+  let collapsed = false;
+
+  function setSideWidth(px) {
+    document.documentElement.style.setProperty('--side-w', Math.max(260, Math.floor(px)) + 'px');
+  }
+
+  function measureExpandedWidth() {
+    const labels = treePanel.querySelectorAll('.node-label');
+    if (!labels.length) return;
+    let widest = 0;
+    labels.forEach(label => {
+      const row = label.closest('.node'); if (!row) return;
+      const ml = parseFloat(row.style.marginLeft || '0') || 0;
+      const textW = Math.ceil(label.scrollWidth);
+      const ICON_W = 20, ROW_PAD = 16, BODY_PAD = 16, GUTTER = 24;
+      const lineW = ml + ICON_W + ROW_PAD + BODY_PAD + textW + GUTTER;
+      widest = Math.max(widest, lineW);
+    });
+    const MIN = 320, MAX = Math.floor(window.innerWidth * 0.45);
+    setSideWidth(Math.max(MIN, Math.min(widest, MAX)));
+  }
+
+  function measureCollapsedWidth() {
+    if (!treeHead || !treeTitle || !toggleBtn) return setSideWidth(300);
+    const s = getComputedStyle(treeHead);
+    const padX = parseFloat(s.paddingLeft) + parseFloat(s.paddingRight);
+    const titleW = Math.ceil(treeTitle.scrollWidth);
+    const btnW   = Math.ceil(toggleBtn.getBoundingClientRect().width);
+    const GUTTER = 12;
+    setSideWidth(titleW + btnW + padX + GUTTER);
+  }
+
+  function applySideWidth() {
+    collapsed ? measureCollapsedWidth() : measureExpandedWidth();
+  }
+
+  applySideWidth();
+  setTimeout(applySideWidth, 60);
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(applySideWidth).catch(()=>{}); }
+  window.addEventListener('resize', () => requestAnimationFrame(applySideWidth));
+
+  toggleBtn && toggleBtn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    toggleBtn.textContent = collapsed ? '⇤' : '⇔';
+    applySideWidth();
+  });
 })();
 </script>
 <?= $this->endSection() ?>

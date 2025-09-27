@@ -108,22 +108,58 @@ ul, #myUL {
   display: block;
   padding-left: 1.5em;
 }
+
+/* Layout row: left-align the columns (was center) */
 .row {
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start; /* changed from center */
   flex-wrap: nowrap;
 }
+
 .column {
   flex-shrink: 0;
   min-width: 0;
 }
+
+/* LEFT COLUMN — fixed width, no wrap, own scroll tied to viewport */
+.column.left,
+.left {
+  /* fixed column width wide enough for long names; allow horizontal scroll if needed */
+  flex: 0 0 520px;
+  width: 520px;
+  max-width: 520px;
+  min-width: 520px;
+
+  padding: 12px 20px;
+  box-sizing: border-box;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+
+  /* no wrapping; scrollbars when needed */
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: auto;
+
+  /* viewport-height scrollbar (subtract header/nav ~140px) */
+  max-height: calc(100vh - 140px);
+}
+
+/* ensure tree items never wrap in left column */
+.left ul,
+.left li,
+.left a,
+.left span {
+  white-space: nowrap;
+}
+
 .column.left ul li {
   margin-bottom: 0.5rem;
 }
 .column.left input {
   margin-bottom: 0.25rem;
 }
+
 .form-row {
   display: flex;
   align-items: center;
@@ -141,15 +177,9 @@ ul, #myUL {
   display: block;
   margin-bottom: 0.5rem;
 }
-.left {
-  min-width: 20%;
-  padding: 12px 20px;
-  box-sizing: border-box;
-  border: 2px solid #ccc;
-  border-radius: 4px;
-  overflow: auto;
-  max-height: 1100px;
-}
+
+/* OLD .left block removed/merged into the fixed version above */
+
 .middle {
   min-width: 20%;
   padding: 12px 20px;
@@ -462,3 +492,4 @@ div#readme-container pre {
   color: black;
   background-color: rgba(200, 200, 200, 1);
 }
+

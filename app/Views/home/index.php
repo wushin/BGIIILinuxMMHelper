@@ -1,7 +1,6 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('head') ?>
-<link rel="stylesheet" href="<?= base_url('assets/vendor/github-markdown.min.css') ?>">
 <style>
   .markdown-body{box-sizing:border-box;min-width:200px;max-width:980px;margin:0 auto;padding:24px}
   @media (max-width:768px){.markdown-body{padding:16px}}

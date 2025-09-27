@@ -10,7 +10,6 @@ $title = $title ?? 'BG3 Linux Helper';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="<?= base_url('/css/styles.css') ?>" rel="stylesheet">
   <link href="<?= base_url('/css/searchPopup.css') ?>" rel="stylesheet">
-  <link rel="stylesheet" href="<?= base_url('assets/vendor/github-markdown.min.css') ?>">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@latest/github-markdown.min.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@latest/github-markdown.min.css"></noscript>
 
@@ -36,7 +35,7 @@ $title = $title ?? 'BG3 Linux Helper';
       height:32px; padding:0 .5rem; border-radius:.35rem; border:1px solid var(--border);
       background:#0b0f14; color:#e6edf3; width:220px;
     }
-    main { max-width:1600px; margin:0 auto; padding:12px; }
+    main { margin:0 auto; padding:12px; }
     footer { padding:.75rem 1rem; background:var(--panel); border-top:1px solid var(--border); margin-top:24px; }
     .muted { color:var(--muted); }
   </style>
