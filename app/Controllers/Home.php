@@ -1,36 +1,24 @@
 <?php
-/**
- * This file is part of BGIII Mod Manager Linux Helper.
- *
- * Copyright (C) 2025 Wushin.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
- */
-
 namespace App\Controllers;
 
 class Home extends BaseController
 {
-    public function index(): string
+    public function index()
     {
-      $readmePath = ROOTPATH . 'README.md';
-      $data['readme'] = file_exists($readmePath)
-        ? (function($p){ try { return service('contentService')->read($p); } catch (\Throwable $__) { return @file_get_contents($p); } })($readmePath)
-        : "README not found.";
+        $readmePath = ROOTPATH . 'README.md';
+        $md = is_file($readmePath) ? file_get_contents($readmePath) : '';
 
-        return view('templates/header')
-            . view('readme')
-            . view('templates/footer');
+        $md = preg_replace("/\\\\\r?\n/", "  \n", $md);
+
+        $html = '';
+        if ($md !== '') {
+            $html = service('markdown')->convert($md)->getContent();
+        }
+
+        return view('home/index', [
+            'title'      => 'Home — BG3 Linux Helper',
+            'readmeHtml' => $html,
+        ]);
     }
 }
+?>

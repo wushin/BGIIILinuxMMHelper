@@ -2,12 +2,14 @@
 
 use CodeIgniter\Router\RouteCollection;
 use App\Controllers\Mods;
+use App\Controllers\Home;
+use App\Controllers\Settings;
 use App\Controllers\UUIDContentUIDGen;
 
 /**
  * @var RouteCollection $routes
  */
-$routes->get('/', 'Home::index');
+$routes->get('/',              [Home::class, 'index']);
 
 // HTML + JSON (content-negotiated)
 $routes->get('mods',                                    [Mods::class, 'list']);       // roots
@@ -33,8 +35,8 @@ $routes->get('uuidcontentuidgen/(:any)', [UUIDContentUIDGen::class, 'index']);
 $routes->get ('mods/localizations/manifest', 'ModsLocalization::manifest');
 $routes->post('mods/localizations/parse',    'ModsLocalization::parse');
 
-$routes->get ('settings',      'Settings::index');
-$routes->post('settings/save', 'Settings::save');
+$routes->get('settings',       [Settings::class, 'index']);
+$routes->post('settings',      [Settings::class, 'save']);
 
 $routes->post('save', [Mods::class, 'save']);
 

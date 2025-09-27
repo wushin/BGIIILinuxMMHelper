@@ -1,217 +1,186 @@
-<?= $this->extend('layouts/default') ?>
-<?= $this->section('content') ?>
 <?php
-function h($s){return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');}
+helper('url');
+$root = $root ?? '';
+$slug = $slug ?? '';
+$tree = $tree ?? [];
+$path = $path ?? '';
 
-/**
- * Recursive renderer for the tree nodes.
- * Node shape: { name, isDir, rel, ext?, children?[] }
- */
-$renderNode = function(array $node, string $root, string $slug) use (&$renderNode)
-{
-    $isDir = !empty($node['isDir']);
-    $name  = (string)($node['name'] ?? '');
-    $rel   = (string)($node['rel']  ?? '');
+function renderTree(array $nodes, int $depth = 0) {
+    foreach ($nodes as $n) {
+        $indent = $depth * 14;
+        $isDir  = !empty($n['isDir']);
+        $name   = $n['name'] ?? '';
+        $rel    = $n['rel']  ?? '';
+        $ext    = $n['ext']  ?? '';
 
-    if ($isDir) {
-        echo '<li class="dir"><strong>'.h($name).'/</strong>';
-        if (!empty($node['children']) && is_array($node['children'])) {
-            echo '<ul>';
-            foreach ($node['children'] as $child) {
-                $renderNode($child, $root, $slug);
-            }
-            echo '</ul>';
+        $cls = $isDir ? 'node dir' : 'node file ext-'.htmlspecialchars($ext);
+        echo '<div class="'.$cls.'" data-rel="'.htmlspecialchars($rel).'" style="margin-left:'.$indent.'px">';
+        echo $isDir ? '📁 ' : '📄 ';
+        echo htmlspecialchars($name);
+        echo '</div>';
+
+        if ($isDir && !empty($n['children']) && is_array($n['children'])) {
+            renderTree($n['children'], $depth+1);
         }
-        echo '</li>';
-    } else {
-        $url = '/mods/'.rawurlencode($root).'/'.rawurlencode($slug).'/'.str_replace('%2F','/',rawurlencode($rel));
-        echo '<li class="file">';
-        echo h($name).' ';
-        echo '<button class="appSystem" onclick="openInMiddle(\'' . h($url) . '\')">Open</button>';
-        echo '</li>';
     }
-};
+}
 ?>
-<input type="hidden" id="path" value="<?= h($root) ?>/<?= h($slug) ?>">
-<h1 style="margin:0 0 .5rem"><?= h($slug) ?></h1>
 
-<!-- Scoped styling to indent each nested level of the tree -->
+<?= $this->extend('layouts/app') ?>
+
+<?= $this->section('head') ?>
 <style>
-  .file-tree, .file-tree ul { list-style: none; margin: 0; padding-left: 0; }
-  .file-tree ul { padding-left: 1.25rem; }   /* indentation per level */
-  .file-tree li { margin: 2px 0; }
-  .file-tree li.dir > strong { display: inline-block; }
-  .pill { display:inline-block;margin-right:.5rem;padding:.1rem .5rem;border-radius:999px;background:#444;color:#fff;font-size:.85em; }
-  .kv { margin:.25rem 0 0; padding-left:1rem; }
-  .kv li { margin:.125rem 0; }
-  .table-wrap{ overflow:auto; }
-  .table{ width:100%; border-collapse:collapse; }
-  .table th, .table td{ border:1px solid #666; padding:.25rem .4rem; text-align:left; vertical-align:top; }
+  :root { --sidebar-w: 360px; }
+  /* Fixed LEFT sidebar below the shared header */
+  .sidebar {
+    position: fixed; top: var(--header-h); left: 0; width: var(--sidebar-w);
+    height: calc(100vh - var(--header-h));
+    background: #0d1117; border-right:1px solid #21262d;
+    overflow: auto; white-space: nowrap; box-sizing: border-box;
+  }
+  .sidebar .head { position: sticky; top:0; background:#0d1117; border-bottom:1px solid #21262d; padding:.6rem .8rem; font-weight:600; }
+  .sidebar .body { padding:.6rem .4rem .8rem; }
+  .node { padding:.2rem .4rem; border-radius:.25rem; cursor:pointer; user-select:none; }
+  .node:hover { background:#161b22; }
+  .node.dir { color:#c9d1d9; }
+  .node.file { color:#a5d6ff; }
+  .node.highlight { background:#14324a; outline:1px solid #1f6feb; }
+
+  /* Main content to the right of sidebar */
+  .mod-layout { margin-left: var(--sidebar-w); padding:12px; box-sizing:border-box; }
+  .columns { max-width:1600px; margin:0 auto; display:grid; grid-template-columns: 1fr 320px; gap:12px; }
+  .panel { background:#0d1117; border:1px solid #21262d; border-radius:.5rem; height: calc(100vh - var(--header-h) - 24px); overflow:auto; box-sizing: border-box; display:flex; flex-direction:column; }
+  .panel > .head { padding:.6rem .8rem; border-bottom:1px solid #21262d; font-weight:600; }
+  .panel > .body { padding:.8rem; flex:1 1 auto; overflow:auto; }
+  .muted { color:#8b949e; }
+  pre, code { white-space: pre-wrap; word-break: break-word; }
+  img.dynImg { max-width:100%; height:auto; display:block; }
+  .badgebar { display:flex; gap:8px; margin-bottom:.5rem; flex-wrap:wrap;}
+  .badge { font-size:.75rem; padding:.15rem .4rem; border:1px solid #21262d; border-radius:.25rem; background:#0c1320;}
+  .flash-red { background:#3a1114; border:1px solid #5a1a1f; padding:.4rem; border-radius:.25rem;}
 </style>
+<?= $this->endSection() ?>
 
-<div class="row">
-  <!-- LEFT: full, always-expanded recursive tree -->
-  <div class="column left">
-    <div class="form-row">
-      <label for="search">Search:</label>
-      <input spellcheck="false" id="search">
-      <button class="appSystem" disabled>Search</button>
-      <button class="appSystem" onclick="clearInput('search')">Clear</button>
-    </div>
-    <div class="form-row">
-      <label for="replace">Replace:</label>
-      <input spellcheck="false" id="replace">
-      <button class="appSystem" disabled>Replace</button>
-      <button class="appSystem" onclick="clearInput('replace')">Clear</button>
-    </div>
+<?= $this->section('content') ?>
 
-    <div class="file-list">
-      <strong>Files:</strong>
-      <ul id="treeUL" class="expanded file-tree">
-        <?php foreach (($tree ?? []) as $n) { $renderNode($n, $root, $slug); } ?>
-      </ul>
-    </div>
+<!-- FIXED LEFT SIDEBAR -->
+<aside class="sidebar">
+  <div class="head">Files &amp; Folders (all depths)</div>
+  <div class="body" id="tree">
+    <?php renderTree($tree, 0); ?>
   </div>
+</aside>
 
-  <!-- MIDDLE: inline viewer -->
-  <div class="column middle" id="displayDiv" style="min-height:400px; overflow:auto;">
-    <div class="muted">Select a file on the left and click <em>Open</em>.</div>
+<!-- MAIN CONTENT TO THE RIGHT -->
+<div class="mod-layout" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>">
+  <div class="columns">
+    <section class="panel">
+      <div class="head">Viewer</div>
+      <div class="body" id="viewer">
+        <p class="muted">Select a file to preview here.</p>
+      </div>
+    </section>
+    <aside class="panel">
+      <div class="head">Details</div>
+      <div class="body" id="meta">
+        <div class="muted">Region, type, and other metadata will appear here.</div>
+      </div>
+    </aside>
   </div>
-
-  <!-- RIGHT: intentionally empty to keep grid happy -->
-  <div class="column right" style="display:none"></div>
 </div>
 
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
 <script>
-function clearInput(id){ const el = document.getElementById(id); if (el) el.value=''; }
+(function(){
+  const rootEl = document.getElementById('modLayout');
+  const root  = rootEl.dataset.root;
+  const slug  = rootEl.dataset.slug;
+  const tree  = document.getElementById('tree');
+  const view  = document.getElementById('viewer');
+  const meta  = document.getElementById('meta');
 
-async function openInMiddle(url){
-  const target = document.getElementById('displayDiv');
-  if(!target) return;
-  target.innerHTML = '<div class="muted">Loading…</div>';
-  try{
-    const resp = await fetch(url + (url.includes('?') ? '&' : '?') + 'format=json', {headers:{'Accept':'application/json'}});
-    if(!resp.ok){ target.innerHTML = '<div class="flash-red">Failed to load</div>'; return; }
-    const data = await resp.json();
+  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+  function badgeBar(obj) {
+    const items=[];
+    if (obj.kind) items.push(`<span class="badge">kind: ${esc(obj.kind)}</span>`);
+    if (obj.ext) items.push(`<span class="badge">ext: ${esc(obj.ext)}</span>`);
+    if (obj.regionGroup) items.push(`<span class="badge">group: ${esc(obj.regionGroup)}</span>`);
+    if (obj.region) items.push(`<span class="badge">region: ${esc(obj.region)}</span>`);
+    return `<div class="badgebar">${items.join(' ')}</div>`;
+  }
+  function renderJson(obj) { return `<pre><code>${esc(JSON.stringify(obj, null, 2))}</code></pre>`; }
+  function relToUrl(rel) {
+    const segs = rel.split('/').filter(Boolean).map(encodeURIComponent);
+    return `/mods/${encodeURIComponent(root)}/${encodeURIComponent(slug)}/${segs.join('/')}` + `?format=json`;
+  }
 
-    const kind        = data.kind || 'unknown';
-    const region      = data.region || null;
-    const regionGroup = data.regionGroup || null;
-    const result      = data.result || {};
-    const raw         = (typeof data.raw === 'string') ? data.raw : '';
+  async function openRel(rel) {
+    try {
+      const r = await fetch(relToUrl(rel), { headers: { 'Accept': 'application/json' }});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
 
-    if (kind === 'image' && result.dataUri) {
-      target.innerHTML = '<img class="dynImg" src="'+escapeHtml(result.dataUri)+'" alt="preview">';
-      return;
-    }
+      meta.innerHTML = badgeBar(data);
 
-    if (kind === 'lsx') {
-      if (regionGroup === 'dialog') {
-        const rows = collectTranslatedStrings(result, 500);
-        target.innerHTML = renderBadgeBar(kind, region, regionGroup)
-          + (rows.length
-              ? renderTable(['Handle','Text'], rows.map(r => [r.handle || '', r.text || '']))
-              : '<div class="muted">No TranslatedString attributes found.</div>');
-        return;
-    }
+      const kind   = data.kind || 'unknown';
+      const ext    = data.ext  || '';
+      const result = data.result || {};
+      const raw    = typeof data.raw === 'string' ? data.raw : '';
 
-      if (regionGroup === 'gameplay') {
-        const stats = summarizeNodeNames(result);
-        target.innerHTML = renderBadgeBar(kind, region, regionGroup)
-          + renderKeyValue(stats, 'Elements by name');
+      if (kind === 'image') {
+        if (result.dataUri) {
+          view.innerHTML = badgeBar(data) + `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
+        } else if (ext.toLowerCase() === 'dds') {
+          view.innerHTML = badgeBar(data) + `<div class="flash-red">DDS preview unavailable (no Imagick DDS delegate).</div>`;
+        } else {
+          view.innerHTML = `<div class="muted">No preview.</div>`;
+        }
         return;
       }
 
-      // assets/meta/unknown → pretty JSON
-      target.innerHTML = renderBadgeBar(kind, region, regionGroup)
-        + '<pre class="code" style="white-space:pre">'+escapeHtml(JSON.stringify(result, null, 2))+'</pre>';
-      return;
-    }
+      if (['xml', 'txt', 'khn', 'lsx'].includes(kind)) {
+        view.innerHTML = badgeBar(data) + renderJson(result || raw || data);
+        return;
+      }
 
-    if (kind === 'xml') {
-      target.innerHTML = renderBadgeBar(kind)
-        + '<pre class="code" style="white-space:pre">'+escapeHtml(JSON.stringify(result, null, 2))+'</pre>';
-      return;
+      if (raw) {
+        view.innerHTML = badgeBar(data) + `<pre><code>${esc(raw)}</code></pre>`;
+      } else {
+        view.innerHTML = badgeBar(data) + renderJson(result || data);
+      }
+    } catch (err) {
+      view.innerHTML = `<div class="flash-red">Failed to load: ${esc(err.message||String(err))}</div>`;
     }
-
-    if (kind === 'txt' || kind === 'khn') {
-      target.innerHTML = renderBadgeBar(kind)
-        + '<pre class="code" style="white-space:pre-wrap">'+escapeHtml(raw || '')+'</pre>';
-      return;
-    }
-
-    // fallback
-    target.innerHTML = renderBadgeBar(kind)
-      + '<pre class="code" style="white-space:pre-wrap">'+escapeHtml(raw || JSON.stringify(result,null,2))+'</pre>';
-  }catch(e){
-    target.innerHTML = '<div class="flash-red">Error: '+escapeHtml(String(e))+'</div>';
   }
-}
 
-/* ---------- tiny helpers ---------- */
-
-function renderBadgeBar(kind, region=null, group=null){
-  const pill = (t)=> '<span class="pill">'+escapeHtml(t)+'</span>';
-  let html = '<div style="margin:0 0 .5rem">';
-  html += pill('type: '+kind);
-  if (region) html += pill('region: '+region);
-  if (group)  html += pill('group: '+group);
-  html += '</div>';
-  return html;
-}
-
-function renderTable(headers, rows){
-  let h = '<div class="table-wrap"><table class="table"><thead><tr>';
-  headers.forEach(th => { h += '<th>'+escapeHtml(th)+'</th>'; });
-  h += '</tr></thead><tbody>';
-  rows.forEach(r => {
-    h += '<tr>' + r.map(c => '<td>'+escapeHtml(String(c))+'</td>').join('') + '</tr>';
+  // File open
+  tree.addEventListener('click', (e) => {
+    const el = e.target.closest('.node');
+    if (!el || el.classList.contains('dir')) return;
+    openRel(el.getAttribute('data-rel') || '');
   });
-  h += '</tbody></table></div>';
-  return h;
-}
 
-function renderKeyValue(map, title){
-  let h = '';
-  if (title) h += '<h3 style="margin:.25rem 0 .5rem">'+escapeHtml(title)+'</h3>';
-  h += '<ul class="kv">';
-  Object.keys(map).sort((a,b)=>a.localeCompare(b)).forEach(k=>{
-    h += '<li><code>'+escapeHtml(k)+'</code> — '+escapeHtml(String(map[k]))+'</li>';
-  });
-  h += '</ul>';
-  return h;
-}
-
-// Walk the LSX JSON tree and collect TranslatedString attributes
-function collectTranslatedStrings(root, limit=1000){
-  const out = [];
-  (function walk(n){
-    if (!n || typeof n !== 'object') return;
-    if (n.name === 'attribute' && n.attrs && /translatedstring/i.test(String(n.attrs.type||''))) {
-      out.push({ handle: n.attrs.handle || '', text: n.attrs.text || '' });
-      if (out.length >= limit) return;
+  // Highlight helper for Fetch UUID widgets
+  function clearHighlights() {
+    document.querySelectorAll('.node.highlight').forEach(n=> n.classList.remove('highlight'));
+  }
+  function highlightAndScroll(query) {
+    clearHighlights();
+    if (!query) return;
+    const nodes = Array.from(document.querySelectorAll('.node.file'));
+    const hit = nodes.find(n => (n.textContent || '').toLowerCase().includes(query.toLowerCase()));
+    if (hit) {
+      hit.classList.add('highlight');
+      hit.scrollIntoView({ block: 'center' });
     }
-    const kids = Array.isArray(n.children) ? n.children : [];
-    for (let i=0;i<kids.length && out.length<limit;i++) walk(kids[i]);
-  })(root);
-  return out;
-}
+  }
 
-// Count element names to give a quick feel for gameplay data
-function summarizeNodeNames(root){
-  const counts = {};
-  (function walk(n){
-    if (!n || typeof n !== 'object') return;
-    if (n.name) counts[n.name] = (counts[n.name]||0) + 1;
-    const kids = Array.isArray(n.children) ? n.children : [];
-    for (let i=0;i<kids.length;i++) walk(kids[i]);
-  })(root);
-  return counts;
-}
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
-}
+  // Listen to layout header events
+  document.addEventListener('app:fetch-uuid', (e)=> highlightAndScroll(e.detail?.value || ''));
+  document.addEventListener('app:fetch-contentuuid', (e)=> highlightAndScroll(e.detail?.value || ''));
+})();
 </script>
 <?= $this->endSection() ?>
 

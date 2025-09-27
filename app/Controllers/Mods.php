@@ -81,6 +81,21 @@ class Mods extends BaseController
         ]));
     }
 
+    // Returns the names of immediate subdirectories under $base (dirs only, A→Z).
+    private function listDirs(?string $base): array
+    {
+        if (!$base || !is_dir($base)) return [];
+        $out = [];
+        foreach (scandir($base) ?: [] as $name) {
+            if ($name === '.' || $name === '..' || $name[0] === '.') continue;
+            if (is_dir($base . DIRECTORY_SEPARATOR . $name)) {
+                $out[] = $name;
+            }
+        }
+        usort($out, static fn($a, $b) => strcasecmp($a, $b));
+        return $out;
+    }
+
     // GET /mods/{Root}/{slug} → full recursive tree (left column)
     public function mod(string $root, string $slug): ResponseInterface
     {

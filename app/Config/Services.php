@@ -6,6 +6,11 @@ use CodeIgniter\Config\BaseService;
 use App\Services\PathResolver;
 use App\Services\ContentService;
 use Config\BG3Paths;
+use League\CommonMark\Environment\Environment;
+use League\CommonMark\MarkdownConverter;
+use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
+use League\CommonMark\Extension\GithubFlavoredMarkdownExtension;
+use League\CommonMark\Extension\HeadingPermalink\HeadingPermalinkExtension;
 
 class Services extends BaseService
 {
@@ -56,6 +61,38 @@ class Services extends BaseService
     {
         if ($getShared) return static::getSharedInstance('mimeGuesser');
         return new \App\Services\MimeGuesser(config(\Config\FileKinds::class));
+    }
+
+    public static function markdown(bool $getShared = true): MarkdownConverter
+    {
+        if ($getShared) {
+            return static::getSharedInstance('markdown');
+        }
+
+        $config = [
+            // GitHub-like: don’t turn single newlines into <br>
+            'renderer' => [
+                'soft_break' => "\n",
+            ],
+            // Valid options for v2 HeadingPermalinkExtension
+            'heading_permalink' => [
+                'min_heading_level'   => 1,
+                'max_heading_level'   => 6,
+                'insert'              => 'before',   // before|after|inside
+                'symbol'              => '¶',        // you can style/hide via CSS
+                'title'               => 'Permalink',
+                'id_prefix'           => '',
+                'apply_id_to_heading' => true,
+                // NOTE: no slug_normalizer here — that caused your error
+            ],
+        ];
+
+        $env = new Environment($config);
+        $env->addExtension(new CommonMarkCoreExtension());
+        $env->addExtension(new GithubFlavoredMarkdownExtension());
+        $env->addExtension(new HeadingPermalinkExtension());
+
+        return new MarkdownConverter($env);
     }
 }
 ?>

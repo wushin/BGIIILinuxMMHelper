@@ -1,93 +1,45 @@
-<?php
-// app/Views/settings/index.php
+<?= $this->extend('layouts/app') ?>
 
-// Use your existing header/footer so the page picks up your theme/nav.
-echo view('templates/header', [
-    'title'     => $pageTitle ?? 'Settings',
-    'activeTab' => $activeTab ?? 'settings',
-]);
-?>
-<div class="row">
-<div class="column left">
-<div class="page settings">
-  <div id="fileName">
-    <h2><?= esc($pageTitle ?? 'Settings') ?></h2>
-  </div>
-
-  <form id="settingsForm" method="post" action="<?= site_url('settings/save') ?>">
+<?= $this->section('content') ?>
+<div class="card">
+  <h2 style="margin-top:0">Paths</h2>
+  <form id="settingsForm" action="<?= site_url('settings') ?>" method="post">
     <?= csrf_field() ?>
-
-    <div class="form-row">
-      <label for="myMods">bg3LinuxHelper.MyMods</label>
-      <input id="myMods" type="text" name="bg3LinuxHelper_MyMods"
-             value="<?= esc($bg3?->MyMods ?? '') ?>" placeholder="MyMods" class="form-control">
-    </div>
-
-    <div class="form-row">
-      <label for="allMods">bg3LinuxHelper.AllMods</label>
-      <input id="allMods" type="text" name="bg3LinuxHelper_AllMods"
-             value="<?= esc($bg3?->AllMods ?? '') ?>" placeholder="AllMods" class="form-control">
-    </div>
-
-    <div class="form-row">
-      <label for="gameData">bg3LinuxHelper.GameData</label>
-      <input id="gameData" type="text" name="bg3LinuxHelper_GameData"
-             value="<?= esc($bg3?->GameData ?? '') ?>" placeholder="GameData" class="form-control">
-    </div>
-
-    <div class="form-row">
-      <label for="mongoUri">mongo.default.uri</label>
-      <input id="mongoUri" type="text" name="mongo_default_uri"
-             value="<?= esc($mongo?->defaultUri ?? '') ?>" placeholder="mongodb://bg3mmh-mongo:27017" class="form-control">
-    </div>
-
-    <div class="form-row">
-      <label for="mongoDb">mongo.default.db</label>
-      <input id="mongoDb" type="text" name="mongo_default_db"
-             value="<?= esc($mongo?->defaultDb ?? '') ?>" placeholder="bg3mmh" class="form-control">
-    </div>
-
-    <div class="actions" style="margin-top: .75rem;">
-      <button id="saveBtn" type="submit" class="appSystem">Save</button>
-      <span id="status" class="muted" style="margin-left:.5rem;"></span>
+    <div style="display:grid; gap:12px; max-width:900px;">
+      <label>
+        <div><strong>GameData</strong> <span class="muted">(<?= esc($cfg->envGameData) ?>)</span></div>
+        <input name="GameData" type="text" value="<?= esc($values['GameData']) ?>" style="width:100%;padding:.5rem;background:#0b0f14;border:1px solid #21262d;border-radius:.35rem;color:#e6edf3;">
+      </label>
+      <label>
+        <div><strong>MyMods</strong> <span class="muted">(<?= esc($cfg->envMyMods) ?>)</span></div>
+        <input name="MyMods" type="text" value="<?= esc($values['MyMods']) ?>" style="width:100%;padding:.5rem;background:#0b0f14;border:1px solid #21262d;border-radius:.35rem;color:#e6edf3;">
+      </label>
+      <label>
+        <div><strong>UnpackedMods</strong> <span class="muted">(<?= esc($cfg->envUnpackedMods) ?>)</span></div>
+        <input name="UnpackedMods" type="text" value="<?= esc($values['UnpackedMods']) ?>" style="width:100%;padding:.5rem;background:#0b0f14;border:1px solid #21262d;border-radius:.35rem;color:#e6edf3;">
+      </label>
+      <div>
+        <button type="submit" style="padding:.5rem .8rem;background:#238636;border:1px solid #2ea043;border-radius:.35rem;color:#fff;cursor:pointer;">Save</button>
+        <span id="saveMsg" class="muted" style="margin-left:8px;"></span>
+      </div>
     </div>
   </form>
 </div>
-</div>
-</div>
+<?= $this->endSection() ?>
 
+<?= $this->section('scripts') ?>
 <script>
-document.getElementById('settingsForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById('saveBtn');
-  const out = document.getElementById('status');
-  btn.disabled = true;
-  out.textContent = 'Saving...';
-  out.className = 'muted';
-
-  try {
-    const fd = new FormData(e.target);
-    const res = await fetch('<?= site_url('settings/save') ?>', {
-      method: 'POST',
-      body: fd,
-      headers: { 'X-Requested-With': 'fetch' }
-    });
-    const j = await res.json();
-    if (j.ok) {
-      out.textContent = 'Saved ✓ (reload may be required)';
-      out.className = 'ok';
-    } else {
-      out.textContent = 'Error: ' + (j.error || 'unknown');
-      out.className = 'error';
-    }
-  } catch (err) {
-    out.textContent = 'Unexpected error';
-    out.className = 'error';
-  } finally {
-    btn.disabled = false;
-  }
+document.getElementById('settingsForm').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  const data = new FormData(form);
+  const r = await fetch(form.action, { method: 'POST', body: data, headers: { 'Accept':'application/json' }});
+  const msg = document.getElementById('saveMsg');
+  if (!r.ok) { msg.textContent = 'Save failed'; msg.style.color = '#ffa198'; return; }
+  const json = await r.json().catch(()=>null);
+  if (json && json.ok) { msg.textContent = 'Saved'; msg.style.color = '#7ee787'; }
+  else { msg.textContent = 'Save failed'; msg.style.color = '#ffa198'; }
 });
 </script>
+<?= $this->endSection() ?>
 
-<?php
-echo view('templates/footer');
