@@ -492,4 +492,8 @@ div#readme-container pre {
   color: black;
   background-color: rgba(200, 200, 200, 1);
 }
+.input.copied {
+  outline: 2px solid #1f6feb;
+  transition: outline-color .6s ease; 
+}
 

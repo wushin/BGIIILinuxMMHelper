@@ -33,7 +33,7 @@ $title = $title ?? 'BG3 Linux Helper';
     .navbtn.active, .navbtn:hover { background:#161b22; }
     .input {
       height:32px; padding:0 .5rem; border-radius:.35rem; border:1px solid var(--border);
-      background:#0b0f14; color:#e6edf3; width:220px;
+      background:#0b0f14; color:#e6edf3; width:320px;
     }
     main { margin:0 auto; padding:12px; }
     footer { padding:.75rem 1rem; background:var(--panel); border-top:1px solid var(--border); margin-top:24px; }
@@ -81,31 +81,99 @@ $title = $title ?? 'BG3 Linux Helper';
 <script>
 (function(){
   const $ = s => document.querySelector(s);
-  const fire = (name, value) => document.dispatchEvent(new CustomEvent(name, { detail: { value } }));
 
   const uuidInput = $('#fetchUUID');
-  const uuidBtn   = $('#btnFetchUUID');
   const cuidInput = $('#fetchCUID');
+  const uuidBtn   = $('#btnFetchUUID');
   const cuidBtn   = $('#btnFetchCUID');
 
-  function hookup(input, btn, eventName) {
-    if (!input || !btn) return;
-    btn.addEventListener('click', () => {
-      const v = input.value.trim();
-      if (v) fire(eventName, v);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const v = input.value.trim();
-        if (v) fire(eventName, v);
-      }
+  // Use CI helpers so URLs work with/without index.php
+  const URL_UUID = '<?= site_url('uuid') ?>';
+  const URL_CUID = '<?= site_url('contentuid') ?>';
+
+  // UUID v4 and ContentUID patterns (be liberal for ContentUID)
+  const reUUID    = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const reCUID    = /^h[0-9a-f]{32}$/i;          // h + 32 hex (common)
+  const reCUIDAlt = /^h[0-9a-f-]{33,36}$/i;      // allow variants (33–36 incl. hyphens)
+
+  function kindOf(v){
+    if (!v) return null;
+    if (reUUID.test(v)) return 'uuid';
+    if (reCUID.test(v) || reCUIDAlt.test(v)) return 'cuid';
+    return null;
+  }
+
+  function setVal(inp, val){
+    if (!inp) return;
+    inp.value = val;
+    inp.dataset.kind = kindOf(val) || '';
+  }
+
+  async function requestId(url){
+    const r = await fetch(url + '?format=json', { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    return j.id || j.ID || '';
+  }
+
+  async function prefill(){
+    try { if (uuidInput) setVal(uuidInput, await requestId(URL_UUID)); } catch(_) {}
+    try { if (cuidInput) setVal(cuidInput, await requestId(URL_CUID)); } catch(_) {}
+  }
+
+  function enableClickToCopy(inp){
+    if (!inp) return;
+    inp.style.cursor = 'copy';
+    inp.title = 'Click to copy';
+    inp.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(inp.value);
+        inp.classList.add('copied');
+        setTimeout(() => inp.classList.remove('copied'), 600);
+      } catch (_) {}
     });
   }
 
-  hookup(uuidInput, uuidBtn, 'app:fetch-uuid');
-  hookup(cuidInput, cuidBtn, 'app:fetch-contentuuid');
+  // Prefill both on load
+  prefill();
+
+  // Click-to-copy on inputs
+  enableClickToCopy(uuidInput);
+  enableClickToCopy(cuidInput);
+
+  // Regenerate on button click (also auto-copy & broadcast)
+  uuidBtn?.addEventListener('click', async () => {
+    try {
+      const v = await requestId(URL_UUID);
+      setVal(uuidInput, v);
+      try { await navigator.clipboard.writeText(v); } catch(_){}
+      document.dispatchEvent(new CustomEvent('app:fetch-uuid', { detail: { value: v } }));
+    } catch (e) { console.error(e); }
+  });
+
+  cuidBtn?.addEventListener('click', async () => {
+    try {
+      const v = await requestId(URL_CUID);
+      setVal(cuidInput, v);
+      try { await navigator.clipboard.writeText(v); } catch(_){}
+      document.dispatchEvent(new CustomEvent('app:fetch-contentuuid', { detail: { value: v } }));
+    } catch (e) { console.error(e); }
+  });
+
+  // Press Enter in either input to broadcast whatever value is present (any length)
+  function broadcastOnEnter(inp, evt) {
+    inp?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const v = (inp.value || '').trim();
+        if (v) document.dispatchEvent(new CustomEvent(evt, { detail: { value: v } }));
+      }
+    });
+  }
+  broadcastOnEnter(uuidInput, 'app:fetch-uuid');
+  broadcastOnEnter(cuidInput, 'app:fetch-contentuuid');
 })();
 </script>
+
 
 <script src="<?= base_url('/js/searchPopup.js') ?>"></script>
 <script src="<?= base_url('/js/bg3.js') ?>"></script>

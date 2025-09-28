@@ -20,24 +20,31 @@
 
 namespace App\Controllers;
 
+use CodeIgniter\HTTP\ResponseInterface;
+
 class UUIDContentUIDGen extends BaseController
 {
-    public function index($type = "UUID"): string
+    public function index(string $type = 'UUID')
     {
-        switch ($type) {
-            case 'UUID':
-                $data['ID'] = $this->generateUUID();
-                break;
-            case 'ContentUID':
-                $data['ID'] = $this->generateRandomString();
-                break;
-            default:
-                $data['ID'] = 'Unrecognized Option';
+        $id = match ($type) {
+            'UUID'       => $this->generateUUID(),
+            'ContentUID' => $this->generateRandomString(),
+            default      => 'Unrecognized Option',
+        };
+
+        // Serve JSON when requested (Accept header or ?format=json)
+        $accept = $this->request->getHeaderLine('Accept');
+        $asJson = stripos($accept, 'application/json') !== false
+               || ($this->request->getGet('format') === 'json');
+
+        if ($asJson) {
+            return $this->response->setJSON(['id' => $id]);
         }
-        return view('mods/uuidcontentuidshow', $data);
+
+        return view('mods/uuidcontentuidshow', ['ID' => $id]);
     }
 
-    private function generateData()
+    private function generateData(): string
     {
         $data = random_bytes(16);
         $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
@@ -50,8 +57,9 @@ class UUIDContentUIDGen extends BaseController
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($this->generateData()), 4));
     }
 
-    private function generateRandomString($length = 36): string
+    private function generateRandomString(int $length = 36): string
     {
+        // Same entropy as UUID, prefixed to look like BG3 Content UIDs
         return vsprintf('h%s%s%s%s%s%s%s%s', str_split(bin2hex($this->generateData()), 4));
     }
 }

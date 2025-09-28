@@ -29,8 +29,8 @@ $routes->get('browse/(:segment)/(.+)',      'Display::browse/$1/$2');   // list 
 $routes->get('search/(:segment)/(:segment)/(:any)', [Mods::class, 'search']);
 $routes->get('replace/(:segment)/(:segment)/(:segment)/(:any)', [Mods::class, 'replace']);
 
-$routes->get('uuidcontentuidgen', [UUIDContentUIDGen::class, 'index']);
-$routes->get('uuidcontentuidgen/(:any)', [UUIDContentUIDGen::class, 'index']);
+$routes->get('uuid',       'UUIDContentUIDGen::index/UUID');
+$routes->get('contentuid', 'UUIDContentUIDGen::index/ContentUID');
 
 $routes->get ('mods/localizations/manifest', 'ModsLocalization::manifest');
 $routes->post('mods/localizations/parse',    'ModsLocalization::parse');
