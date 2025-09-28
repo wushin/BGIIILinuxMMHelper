@@ -49,7 +49,7 @@ $title = $title ?? 'BG3 Linux Helper';
     <div class="hdr-left">
       <a class="navbtn <?= (uri_string()==='')?'active':'' ?>" href="<?= site_url('/') ?>">Home</a>
       <a class="navbtn <?= str_starts_with(uri_string(),'mods')?'active':'' ?>" href="<?= site_url('mods/MyMods/') ?>">Mods</a>
-      <a class="navbtn <?= (uri_string()==='mods/GameData')?'active':'' ?>" href="<?= site_url('mods/GameData') ?>">GameData</a>
+      <button class="navbtn" id="btn-game-data">Game Data</button>
     </div>
 
     <!-- MIDDLE: Title (page supplies $title) -->
@@ -173,6 +173,14 @@ $title = $title ?? 'BG3 Linux Helper';
   broadcastOnEnter(cuidInput, 'app:fetch-contentuuid');
 })();
 </script>
+
+<script>
+  // Attach click to your existing function (defined in the big IIFE below)
+  document.getElementById('btn-game-data')
+    .addEventListener('click', () => window.toggleMongoPopup && window.toggleMongoPopup());
+</script>
+
+<script src="/js/mongoPopup.js" />
 
 <?= $this->renderSection('scripts') ?>
 </body>
