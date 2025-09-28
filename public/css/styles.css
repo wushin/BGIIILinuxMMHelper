@@ -513,4 +513,14 @@ div#readme-container pre {
   background:#14324a; border-color:#1f6feb; color:#dbe9ff;
   box-shadow: 0 0 0 1px rgba(31,111,235,.25) inset;
 }
+/* Optional: general safety nets if your layout uses flex/grid */
+.sidebar-section, .panel, .card, .section {
+  min-width: 0;
+}
+.section-body, .panel-body, .card-body, .content {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 

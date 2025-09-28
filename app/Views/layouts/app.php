@@ -180,8 +180,8 @@ $title = $title ?? 'BG3 Linux Helper';
     .addEventListener('click', () => window.toggleMongoPopup && window.toggleMongoPopup());
 </script>
 
-<script src="/js/mongoPopup.js" />
-<script src="/js/bg3.js" />
+<script src="/js/filesSectionAutoHeight.js"></script>
+<script src="/js/mongoPopup.js"></script>
 
 <?= $this->renderSection('scripts') ?>
 </body>
