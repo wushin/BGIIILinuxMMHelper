@@ -195,21 +195,21 @@ function renderTree(array $nodes, int $depth = 0) {
 <?= $this->section('scripts') ?>
 <script>
 (function(){
-  const rootEl = document.getElementById('modLayout');
-  const root  = rootEl.dataset.root;
-  const slug  = rootEl.dataset.slug;
-  const tree  = document.getElementById('tree');
-  const view  = document.getElementById('viewer');
-  const meta  = document.getElementById('meta');
+  const rootEl  = document.getElementById('modLayout');
+  const root    = rootEl.dataset.root;
+  const slug    = rootEl.dataset.slug;
+  const tree    = document.getElementById('tree');
+  const view    = document.getElementById('viewer');
+  const meta    = document.getElementById('meta');
   const colLeft = document.getElementById('colLeft');
 
   function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
   function badgeBar(obj) {
     const items=[];
-    if (obj.kind) items.push(`<span class="badge">kind: ${esc(obj.kind)}</span>`);
-    if (obj.ext) items.push(`<span class="badge">ext: ${esc(obj.ext)}</span>`);
+    if (obj.kind)        items.push(`<span class="badge">kind: ${esc(obj.kind)}</span>`);
+    if (obj.ext)         items.push(`<span class="badge">ext: ${esc(obj.ext)}</span>`);
     if (obj.regionGroup) items.push(`<span class="badge">group: ${esc(obj.regionGroup)}</span>`);
-    if (obj.region) items.push(`<span class="badge">region: ${esc(obj.region)}</span>`);
+    if (obj.region)      items.push(`<span class="badge">region: ${esc(obj.region)}</span>`);
     return `<div class="badgebar">${items.join(' ')}</div>`;
   }
   function renderJson(obj) { return `<pre><code>${esc(JSON.stringify(obj, null, 2))}</code></pre>`; }
@@ -220,22 +220,24 @@ function renderTree(array $nodes, int $depth = 0) {
 
   async function openRel(rel) {
     try {
+      view.innerHTML = `<div class="muted">Loading…</div>`;
+
       const r = await fetch(relToUrl(rel), { headers: { 'Accept': 'application/json' }});
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
+      const data   = await r.json();
 
       meta.innerHTML = badgeBar(data);
 
       const kind   = data.kind || 'unknown';
-      const ext    = data.ext  || '';
+      const ext    = (data.ext || '').toLowerCase();
       const result = data.result || {};
       const raw    = typeof data.raw === 'string' ? data.raw : '';
 
       if (kind === 'image') {
         if (result.dataUri) {
-          view.innerHTML = badgeBar(data) + `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
-        } else if (ext.toLowerCase() === 'dds') {
-          view.innerHTML = badgeBar(data) + `<div class="flash-red">DDS preview unavailable (no Imagick DDS delegate).</div>`;
+          view.innerHTML = `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
+        } else if (ext === 'dds') {
+          view.innerHTML = `<div class="muted">DDS preview unavailable (no Imagick DDS delegate).</div>`;
         } else {
           view.innerHTML = `<div class="muted">No preview.</div>`;
         }
@@ -243,19 +245,22 @@ function renderTree(array $nodes, int $depth = 0) {
       }
 
       if (['xml', 'txt', 'khn', 'lsx'].includes(kind)) {
-        view.innerHTML = badgeBar(data) + renderJson(result || raw || data);
+        view.innerHTML = renderJson(result || raw || data);
         return;
       }
 
       if (raw) {
-        view.innerHTML = badgeBar(data) + `<pre><code>${esc(raw)}</code></pre>`;
+        view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
       } else {
-        view.innerHTML = badgeBar(data) + renderJson(result || data);
+        view.innerHTML = renderJson(result || data);
       }
     } catch (err) {
       view.innerHTML = `<div class="flash-red">Failed to load: ${esc(err.message||String(err))}</div>`;
     }
   }
+
+  // expose openRel if other code uses it
+  window.openRel = openRel;
 
   // Open on click (files only)
   tree.addEventListener('click', (e) => {

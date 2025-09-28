@@ -22,25 +22,28 @@ namespace App\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
 use MongoDB\Client as MongoClient;
+use MongoDB\Collection;
+use App\Libraries\LsxHelper;
 
 class SearchMongo extends ResourceController
 {
     protected $format = 'json';
 
-    public function __construct(private readonly MongoClient $client)
+    private function col(): Collection
     {
+        $cfg = config('Mongo');
+        $uri = $cfg->uri ?? 'mongodb://127.0.0.1:27017';
+        $db  = $cfg->db  ?? ($cfg->database ?? 'bg3');
+        $col = $cfg->collection ?? 'bg3_files';
+
+        $clientOptions = is_array($cfg->clientOptions ?? null) ? $cfg->clientOptions : [];
+        $driverOptions = is_array($cfg->driverOptions ?? null) ? $cfg->driverOptions : [];
+
+        $client = new MongoClient($uri, $clientOptions, $driverOptions);
+        return $client->selectDatabase($db)->selectCollection($col);
     }
 
-    private function col()
-    {
-        $db = $this->client->selectDatabase(config('Mongo')->database);
-        return $db->selectCollection(config('Mongo')->collection ?? 'bg3_files');
-    }
-
-    /**
-     * GET /search/mongo
-     * q, page, dirs[], exts[], regions[], groups[]
-     */
+    /** GET /search/mongo — q, page, dirs[], exts[], regions[], groups[] */
     public function index()
     {
         $q       = trim((string) $this->request->getGet('q'));
@@ -55,50 +58,77 @@ class SearchMongo extends ResourceController
         $dirs    = is_array($dirs)    ? array_values(array_unique(array_filter($dirs)))    : [];
         $exts    = is_array($exts)    ? array_values(array_unique(array_filter($exts)))    : [];
         $regions = is_array($regions) ? array_values(array_unique(array_filter($regions))) : [];
-        $groups  = is_array($groups)  ? array_values(array_unique(array_filter($groups)))  : [];
+        $groups  = is_array($groups)  ? array_values(array_unique(array_map('strtolower', array_filter($groups)) )) : [];
 
-        $filterAnd = [];
+        $and = [];
 
         if ($q !== '') {
-            // Prefer the text index; falls back to case-insensitive regex on raw if needed
-            $filterAnd[] = ['$or' => [
-                ['$text' => ['$search' => $q]],
+            $and[] = ['$or' => [
                 ['raw'   => ['$regex' => $q, '$options' => 'i']],
                 ['names' => ['$regex' => $q, '$options' => 'i']],
+                ['name'  => ['$regex' => $q, '$options' => 'i']],
+                ['uuids' => $q],
+                ['cuids' => $q],
             ]];
         }
 
-        if ($dirs)    $filterAnd[] = ['top'           => ['$in' => $dirs]];
-        if ($exts)    $filterAnd[] = ['ext'           => ['$in' => array_map('strtolower', $exts)]];
-        if ($regions) $filterAnd[] = ['lsx.regions'   => ['$in' => $regions]];
-        if ($groups)  $filterAnd[] = ['lsx.groupings' => ['$in' => $groups]];
-
-        $filter = $filterAnd ? ['$and' => $filterAnd] : [];
-
-        $opts = [
-            'skip'  => ($page - 1) * $perPage,
-            'limit' => $perPage,
-            'sort'  => ['mtime' => -1],
-        ];
-
-        // If $text is used, sort by textScore primarily
-        if ($q !== '') {
-            $opts['projection'] = ['score' => ['$meta' => 'textScore'], 'raw' => 1, 'abs' => 1, 'rel' => 1, 'name' => 1, 'top' => 1];
-            $opts['sort']       = ['score' => ['$meta' => 'textScore'], 'mtime' => -1];
-        } else {
-            $opts['projection'] = ['raw' => 1, 'abs' => 1, 'rel' => 1, 'name' => 1, 'top' => 1];
+        if ($dirs) {
+            $and[] = ['top' => ['$in' => $dirs]];
         }
 
-        $col = $this->col();
-        $cursor = $col->find($filter, $opts);
+        if ($exts) {
+            $and[] = ['ext' => ['$in' => array_map('strtolower', $exts)]];
+        }
+
+        // Regions (support BOTH schemas: lsx.region (str) and lsx.regions (arr))
+        if ($regions) {
+            $and[] = ['$or' => [
+                ['lsx.region'  => ['$in' => $regions]],
+                ['lsx.regions' => ['$in' => $regions]],
+            ]];
+        }
+
+        // Groups: if we have lsx.group on docs, match it; otherwise derive regions-by-group and match those
+        if ($groups) {
+            $ors = [];
+
+            // 1) direct match if collection has lsx.group (lowercase)
+            $ors[] = ['lsx.group' => ['$in' => $groups]];
+
+            // 2) derive regions that belong to requested groups,
+            //    then match docs where lsx.region/lsx.regions are in that set.
+            $allRegions = $this->allRegionIds();
+            $wantRegions = [];
+            foreach ($allRegions as $r) {
+                $g = strtolower(LsxHelper::regionGroupFromId($r));
+                if (in_array($g, $groups, true)) {
+                    $wantRegions[$r] = true;
+                }
+            }
+            $wantList = array_keys($wantRegions);
+            if ($wantList) {
+                $ors[] = ['lsx.region'  => ['$in' => $wantList]];
+                $ors[] = ['lsx.regions' => ['$in' => $wantList]];
+            }
+
+            if ($ors) $and[] = ['$or' => $ors];
+        }
+
+        $filter = $and ? ['$and' => $and] : [];
+
+        $opts = [
+            'skip'       => ($page - 1) * $perPage,
+            'limit'      => $perPage,
+            'sort'       => ['mtime' => -1],
+            'projection' => ['raw' => 1, 'abs' => 1, 'rel' => 1, 'name' => 1, 'top' => 1],
+        ];
+
+        $col     = $this->col();
+        $cursor  = $col->find($filter, $opts);
         $results = [];
         foreach ($cursor as $doc) {
-            $filepath = ($doc['top'] ?? '') !== ''
-                ? ($doc['top'] . '/' . ltrim($doc['rel'] ?? $doc['name'], '/'))
-                : ($doc['rel'] ?? $doc['name']);
-
             $results[] = [
-                'filepath' => $filepath ?? ($doc['abs'] ?? '(unknown)'),
+                'filepath' => $doc['rel'] ?? $doc['abs'] ?? $doc['name'] ?? '(unknown)',
                 'raw'      => $doc['raw'] ?? '',
             ];
         }
@@ -113,24 +143,30 @@ class SearchMongo extends ResourceController
         ]);
     }
 
-    /**
-     * GET /search/mongo-filters
-     * Returns only: dirs, exts, regions, groups
-     */
+    /** GET /search/mongo-filters — returns dirs, exts, regions, groups (backward-compatible) */
     public function filters()
     {
         $col = $this->col();
 
-        $dirs    = $col->distinct('top', []);
-        $exts    = $col->distinct('ext', []);
-        $regions = $col->distinct('lsx.regions',   [['lsx.regions' => ['$exists' => true]]]);
-        $groups  = $col->distinct('lsx.groupings', [['lsx.groupings' => ['$exists' => true]]]);
+        // Basic filters
+        $dirs = $this->cleanList($col->distinct('top', []));
+        $exts = array_map('strtolower', $this->cleanList($col->distinct('ext', [])));
 
-        // normalize + sort
-        $dirs    = $this->cleanList($dirs);
-        $exts    = array_map('strtolower', $this->cleanList($exts));
-        $regions = $this->cleanList($regions);
-        $groups  = $this->cleanList($groups);
+        // Regions from BOTH schemas:
+        //   - singular: lsx.region (string)
+        //   - legacy:   lsx.regions (array)
+        $regionsSingular = $this->cleanList($col->distinct('lsx.region', ['lsx.region' => ['$exists' => true, '$ne' => '']]));
+        $regionsArray    = $this->distinctFromArrayField($col, 'lsx.regions');
+
+        $regions = $this->uniqMerge($regionsSingular, $regionsArray);
+
+        // Groups: prefer stored lsx.group, else derive from region ids via LsxHelper
+        $storedGroups = $this->cleanList($col->distinct('lsx.group', ['lsx.group' => ['$exists' => true, '$ne' => '']]));
+        $derivedGroups = [];
+        foreach ($regions as $r) {
+            $derivedGroups[] = strtolower(LsxHelper::regionGroupFromId($r));
+        }
+        $groups = $this->uniqMerge(array_map('strtolower', $storedGroups), $derivedGroups);
 
         sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
         sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
@@ -140,23 +176,59 @@ class SearchMongo extends ResourceController
         return $this->respond([
             'dirs'    => $dirs,
             'exts'    => $exts,
-            'regions' => $regions,
-            'groups'  => $groups,
+            'regions' => $regions,        // region ids like "Templates", "Progressions", "DialogBank", …
+            'groups'  => $groups,         // "assets", "dialog", "gameplay", "meta", "unknown"
         ]);
     }
 
+    /** Collect ALL distinct region ids from both schemas */
+    private function allRegionIds(): array
+    {
+        $col = $this->col();
+        $a = $this->cleanList($col->distinct('lsx.region', ['lsx.region' => ['$exists' => true, '$ne' => '']]));
+        $b = $this->distinctFromArrayField($col, 'lsx.regions');
+        return $this->uniqMerge($a, $b);
+    }
+
+    /** Distinct values from an array field via aggregation (handles legacy lsx.regions) */
+    private function distinctFromArrayField(Collection $col, string $path): array
+    {
+        $pipeline = [
+            ['$match'  => [$path => ['$exists' => true, '$ne' => []]]],
+            ['$project'=> ['v' => '$' . $path]],
+            ['$unwind' => '$v'],
+            ['$match'  => ['v' => ['$type' => 'string', '$ne' => '']]],
+            ['$group'  => ['_id' => null, 'vals' => ['$addToSet' => '$v']]],
+        ];
+        $vals = [];
+        foreach ($col->aggregate($pipeline) as $doc) {
+            $vals = (array)($doc['vals'] ?? []);
+        }
+        return $this->cleanList($vals);
+    }
+
+    /** Utilities */
     private function cleanList($arr): array
     {
         $out = [];
         foreach ((array) $arr as $v) {
             if ($v === null) continue;
             $s = trim((string) $v);
-            if ($s === '') continue;
-            // Drop dot-prefixed names from filters defensively
-            if ($s[0] === '.') continue;
+            if ($s === '' || $s[0] === '.') continue;
             $out[$s] = true;
         }
         return array_keys($out);
+    }
+
+    private function uniqMerge(array ...$lists): array
+    {
+        $set = [];
+        foreach ($lists as $list) {
+            foreach ($list as $v) {
+                $set[$v] = true;
+            }
+        }
+        return array_keys($set);
     }
 }
 ?>

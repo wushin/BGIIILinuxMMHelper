@@ -23,6 +23,7 @@ namespace App\Controllers;
 use CodeIgniter\HTTP\ResponseInterface;
 use App\Helpers\XmlHelper;
 use App\Helpers\TextParserHelper;
+use App\Libraries\LsxHelper;
 use App\Libraries\LocalizationScanner;
 
 class Mods extends BaseController
@@ -248,8 +249,8 @@ class Mods extends BaseController
                 $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
                 $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
 
-                $region      = $this->detectRegionFromHead($bytes) ?? 'unknown';
-                $regionGroup = $this->regionGroupFromId($region);
+                $region      = LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
+                $regionGroup = LsxHelper::regionGroupFromId($region);
 
                 $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
                 $payload  = json_decode($jsonTree, true);
@@ -385,76 +386,6 @@ class Mods extends BaseController
             if (is_dir($base . DIRECTORY_SEPARATOR . $name)) $n++;
         }
         return $n;
-    }
-
-    /** Peek <region id="..."> from first ~8KB of LSX (string) */
-    private function detectRegionFromHead(string $xml, int $bytes = 8192): ?string
-    {
-        $head = substr($xml, 0, $bytes);
-        if ($head === '') return null;
-        if (preg_match('/<region\s+id\s*=\s*"([^"]+)"/i', $head, $m)) return $m[1];
-        return null;
-    }
-
-    /** Map region → group (dialog/gameplay/assets/meta/unknown) */
-    private function regionGroupFromId(string $region): string
-    {
-        switch ($region) {
-            case 'dialog':
-            case 'DialogBank':
-            case 'TimelineBank':
-            case 'TimelineContent':
-            case 'TLScene':
-                return 'dialog';
-
-            case 'AbilityDistributionPresets':
-            case 'ActionResourceDefinitions':
-            case 'Backgrounds':
-            case 'CharacterCreationAppearanceVisuals':
-            case 'CharacterCreationPresets':
-            case 'ClassDescriptions':
-            case 'ConditionErrors':
-            case 'DefaultValues':
-            case 'Effect':
-            case 'EffectBank':
-            case 'EnterPhaseSoundEvents':
-            case 'EnterSoundEvents':
-            case 'EquipmentLists':
-            case 'ExitPhaseSoundEvents':
-            case 'ExitSoundEvents':
-            case 'FactionContainer':
-            case 'FactionManager':
-            case 'Flags':
-            case 'LevelMapValues':
-            case 'MultiEffectInfos':
-            case 'Origins':
-            case 'PassiveLists':
-            case 'ProgressionDescriptions':
-            case 'Progressions':
-            case 'Races':
-            case 'SkillLists':
-            case 'SpellLists':
-            case 'Tags':
-            case 'Templates':
-            case 'TooltipExtraTexts':
-                return 'gameplay';
-
-            case 'TextureBank':
-            case 'TextureAtlasInfo':
-            case 'MaterialBank':
-            case 'CharacterVisualBank':
-            case 'VisualBank':
-            case 'IconUVList':
-                return 'assets';
-
-            case 'Config':
-            case 'Dependencies':
-            case 'MetaData':
-                return 'meta';
-
-            default:
-                return 'unknown';
-        }
     }
 
     private function tryTxtToJson(string $bytes): array
