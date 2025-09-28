@@ -174,10 +174,6 @@ $title = $title ?? 'BG3 Linux Helper';
 })();
 </script>
 
-
-<script src="<?= base_url('/js/searchPopup.js') ?>"></script>
-<script src="<?= base_url('/js/bg3.js') ?>"></script>
-
 <?= $this->renderSection('scripts') ?>
 </body>
 </html>

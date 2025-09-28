@@ -496,4 +496,21 @@ div#readme-container pre {
   outline: 2px solid #1f6feb;
   transition: outline-color .6s ease; 
 }
+/* selected mod highlight */
+.modlist { display: flex; flex-direction: column; gap: 6px; padding: .5rem; }
+.mod-item {
+  display: block;
+  padding: .35rem .55rem;
+  border: 1px solid #21262d;
+  border-radius: .35rem;
+  background: #0d1117;
+  color: #c9d1d9;
+  text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mod-item:hover { background:#161b22; border-color:#30363d; }
+.mod-item.active {
+  background:#14324a; border-color:#1f6feb; color:#dbe9ff;
+  box-shadow: 0 0 0 1px rgba(31,111,235,.25) inset;
+}
 

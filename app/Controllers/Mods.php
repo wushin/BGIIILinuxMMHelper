@@ -59,7 +59,7 @@ class Mods extends BaseController
         ]));
     }
 
-    // GET /mods/{Root} → list mod directories (HTML or JSON)
+    // GET /mods/{Root} → (MyMods uses browse layout)
     public function listRoot(string $root): ResponseInterface
     {
         $rootKey = $this->normalizeRoot($root);
@@ -68,6 +68,32 @@ class Mods extends BaseController
             return $this->notFound("Root not configured: {$rootKey}");
         }
 
+        // Special behavior: for MyMods show the combined "browse" page
+        if ($rootKey === 'MyMods') {
+            $myMods = $this->getMyModsList();  // array of directory names
+
+            if ($this->wantsJson()) {
+                return $this->response->setJSON([
+                    'ok'    => true,
+                    'root'  => $rootKey,
+                    'mods'  => $myMods,
+                    'slug'  => '',
+                    'path'  => '',
+                    'tree'  => [], // no mod selected yet
+                ]);
+            }
+
+            return $this->response->setBody(view('mods/browse', [
+                'pageTitle' => 'MyMods — Directories',
+                'root'      => $rootKey,
+                'slug'      => '',
+                'path'      => '',
+                'tree'      => [],     // empty until a mod is chosen
+                'myMods'    => $myMods // top card content
+            ]));
+        }
+
+        // Default behavior for other roots (GameData/UnpackedMods): directory list
         $mods = $this->listDirs($base);
 
         if ($this->wantsJson()) {
@@ -79,6 +105,42 @@ class Mods extends BaseController
             'root'      => $rootKey,
             'mods'      => $mods,
         ]));
+    }
+
+    /**
+     * Returns a sorted list of top-level directory names under MyMods (no recursion, no hidden).
+     */
+    private function getMyModsList(): array
+    {
+        try {
+            $base = service('pathResolver')->myMods();
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        if (!$base || !is_dir($base)) {
+            return [];
+        }
+
+        $dirs = [];
+        $dh = @opendir($base);
+        if ($dh === false) {
+            return [];
+        }
+
+        while (($name = readdir($dh)) !== false) {
+            if ($name === '.' || $name === '..' || $name[0] === '.') {
+                continue; // skip dot/hidden
+            }
+            $full = $base . DIRECTORY_SEPARATOR . $name;
+            if (is_dir($full)) {
+                $dirs[] = $name; // top-level dir only
+            }
+        }
+        closedir($dh);
+
+        sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
+        return $dirs;
     }
 
     // Returns the names of immediate subdirectories under $base (dirs only, A→Z).
@@ -121,6 +183,7 @@ class Mods extends BaseController
             'slug'      => $slug,
             'path'      => '',
             'tree'      => $tree,
+            'myMods'    => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
         ]));
     }
 
@@ -150,6 +213,7 @@ class Mods extends BaseController
                 'slug'      => $slug,
                 'path'      => $relPath,
                 'tree'      => $tree,
+                'myMods'    => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
             ]));
         }
 
