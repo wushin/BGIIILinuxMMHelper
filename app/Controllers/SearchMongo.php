@@ -20,13 +20,14 @@
 
 namespace App\Controllers;
 
-use CodeIgniter\RESTful\ResourceController;
+use CodeIgniter\API\ResponseTrait;
 use MongoDB\Client as MongoClient;
 use MongoDB\Collection;
 use App\Libraries\LsxHelper;
 
-class SearchMongo extends ResourceController
-{
+class SearchMongo extends BaseController {
+    /** @var string[] */
+    private array $allowedTextExts = ['txt','khn','xml','lsx','ann','anc','cln','clc'];
     protected $format = 'json';
 
     private function col(): Collection
@@ -61,6 +62,8 @@ class SearchMongo extends ResourceController
         $groups  = is_array($groups)  ? array_values(array_unique(array_map('strtolower', array_filter($groups)) )) : [];
 
         $and = [];
+        // Always restrict results to allowed text extensions
+        $and[] = ['ext' => ['$in' => $this->allowedTextExts]];
 
         if ($q !== '') {
             $and[] = ['$or' => [
@@ -77,7 +80,8 @@ class SearchMongo extends ResourceController
         }
 
         if ($exts) {
-            $and[] = ['ext' => ['$in' => array_map('strtolower', $exts)]];
+            $exts = array_values(array_filter(array_map('strtolower', $exts), fn($e) => in_array($e, $this->allowedTextExts, true)));
+            if ($exts) { $and[] = ['ext' => ['$in' => $exts]]; }
         }
 
         // Regions (support BOTH schemas: lsx.region (str) and lsx.regions (arr))
@@ -135,7 +139,7 @@ class SearchMongo extends ResourceController
 
         $total = $col->countDocuments($filter);
 
-        return $this->respond([
+        return $this->response->setJSON([
             'page'    => $page,
             'perPage' => $perPage,
             'total'   => $total,
@@ -151,6 +155,8 @@ class SearchMongo extends ResourceController
         // Basic filters
         $dirs = $this->cleanList($col->distinct('top', []));
         $exts = array_map('strtolower', $this->cleanList($col->distinct('ext', [])));
+        $exts = array_values(array_filter($exts, fn($e) => in_array($e, $this->allowedTextExts, true)));
+        if (!$exts) { $exts = $this->allowedTextExts; }
 
         // Regions from BOTH schemas:
         //   - singular: lsx.region (string)
@@ -173,7 +179,7 @@ class SearchMongo extends ResourceController
         sort($regions, SORT_NATURAL | SORT_FLAG_CASE);
         sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
 
-        return $this->respond([
+        return $this->response->setJSON([
             'dirs'    => $dirs,
             'exts'    => $exts,
             'regions' => $regions,        // region ids like "Templates", "Progressions", "DialogBank", …
