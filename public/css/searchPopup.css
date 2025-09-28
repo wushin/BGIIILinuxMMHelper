@@ -9,7 +9,8 @@
   --text-muted: var(--muted, #9fb3c8);
   --border: var(--border, #1e2935);
   --brand: var(--accent, #6cb2ff);
-  --mark-bg: var(--mark-bg, #554400);
+  /* ✅ explicit yellow for highlights */
+  --mark-bg: #ffeb72;
   --radius: var(--radius, 12px);
   --radius-sm: calc(var(--radius) * 0.6);
   --space: 10px;
@@ -181,5 +182,20 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: var
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-mark { background: var(--mark-bg); padding: 0 2px; border-radius: 2px; }
+/* Highlighted search term */
+mark {
+  background: var(--mark-bg, #ffeb72);
+  color: #1a1a1a;
+  padding: 0 .15em;
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px rgba(255, 235, 114, .25) inset;
+}
+
+/* Dark theme tweak */
+[data-theme="dark"] mark,
+[data-color-mode="dark"] mark {
+  background: #ffd84d;
+  color: #111;
+  box-shadow: 0 0 0 2px rgba(255, 216, 77, .25) inset;
+}
 

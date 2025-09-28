@@ -10,7 +10,7 @@
     const win = window.open('', '_blank', 'width=1100,height=850,resizable=yes,scrollbars=yes');
     window.mongoPopupWin = win;
 
-    // 1) Collect theme attrs + CSS from the OPENER (safe, same-context)
+    // 1) Collect theme attrs + CSS from the OPENER (same-origin)
     const themeAttrs = {};
     ['data-theme', 'data-color-mode', 'data-ui', 'data-mode'].forEach((attr) => {
       const vHtml = document.documentElement.getAttribute(attr);
@@ -26,7 +26,7 @@
     const openerInlineStyles = Array.from(document.querySelectorAll('style'))
       .map(s => s.textContent || '');
 
-    // 2) Popup markup (structure/UI)
+    // 2) Popup markup (now includes Regions + Groups)
     const popupHtml = `
       <div id="mongo-search-popup" class="mongo-popup">
         <div class="mongo-popup-header">
@@ -45,6 +45,8 @@
             <div class="filters-summary">
               <span id="dir-count" class="count-badge">0 selected</span>
               <span id="ext-count" class="count-badge">0 selected</span>
+              <span id="region-count" class="count-badge">0 selected</span>
+              <span id="group-count" class="count-badge">0 selected</span>
             </div>
           </div>
 
@@ -70,6 +72,29 @@
               </div>
             </div>
             <div id="ext-filters" class="filter-grid"></div>
+          </div>
+
+          <div class="filter-section" data-kind="region">
+            <div class="filter-section-head">
+              <strong>Regions</strong>
+              <div class="filter-head-actions">
+                <input id="region-search" class="filter-search" placeholder="Filter regions…" />
+                <button type="button" data-action="selectAll" data-scope="region">Select All</button>
+                <button type="button" data-action="deselectAll" data-scope="region">Deselect All</button>
+              </div>
+            </div>
+            <div id="region-filters" class="filter-grid"></div>
+          </div>
+
+          <div class="filter-section" data-kind="group">
+            <div class="filter-section-head">
+              <strong>Groups</strong>
+              <div class="filter-head-actions">
+                <button type="button" data-action="selectAll" data-scope="group">Select All</button>
+                <button type="button" data-action="deselectAll" data-scope="group">Deselect All</button>
+              </div>
+            </div>
+            <div id="group-filters" class="filter-grid"></div>
           </div>
         </div>
 
@@ -106,7 +131,7 @@
                   if (node) node.setAttribute(parts[1], theme[k]);
                 });
 
-                // Inject opener <link rel="stylesheet"> first (so your app/theme styles win)
+                // Inject opener <link rel="stylesheet"> first
                 var hrefs = ${JSON.stringify(openerStylesheets)};
                 hrefs.forEach(function(href){
                   try {
@@ -128,7 +153,6 @@
                   } catch(e){}
                 });
               } catch(e) {
-                // If anything fails, popup still works with base CSS
                 console.error('Theme/CSS injection failed:', e);
               }
             })();
@@ -142,37 +166,45 @@
 
   // --- PRIVATE: logic that runs inside the popup window
   function popupLogic() {
-    const input = document.getElementById('mongo-search-input');
-    const dropdown = document.getElementById('search-history-dropdown');
-    const results = document.getElementById('mongo-search-results');
-    const pager = document.getElementById('mongo-pagination');
-    const loading = document.getElementById('mongo-search-loading');
+    const input     = document.getElementById('mongo-search-input');
+    const dropdown  = document.getElementById('search-history-dropdown');
+    const results   = document.getElementById('mongo-search-results');
+    const pager     = document.getElementById('mongo-pagination');
+    const loading   = document.getElementById('mongo-search-loading');
     const searchBtn = document.getElementById('mongo-search-button');
     const toggleBtn = document.getElementById('toggle-filters');
 
-    const dirCountEl = document.getElementById('dir-count');
-    const extCountEl = document.getElementById('ext-count');
+    const dirCountEl    = document.getElementById('dir-count');
+    const extCountEl    = document.getElementById('ext-count');
+    const regionCountEl = document.getElementById('region-count');
+    const groupCountEl  = document.getElementById('group-count');
 
-    let currentPage = 1;
-    let currentTerm = '';
+    let currentPage   = 1;
+    let currentTerm   = '';
     let searchHistory = JSON.parse(localStorage.getItem('mongoSearchHistory') || '[]');
 
     // restore persisted filters + last query
-    let selectedDirs = JSON.parse(localStorage.getItem('mongoDirs') || '[]');
-    let selectedExts = JSON.parse(localStorage.getItem('mongoExts') || '[]');
+    let selectedDirs    = JSON.parse(localStorage.getItem('mongoDirs') || '[]');
+    let selectedExts    = JSON.parse(localStorage.getItem('mongoExts') || '[]');
+    let selectedRegions = JSON.parse(localStorage.getItem('mongoRegions') || '[]');
+    let selectedGroups  = JSON.parse(localStorage.getItem('mongoGroups') || '[]');
     const lastQuery = localStorage.getItem('mongoLastQuery') || '';
-    if (lastQuery) input.value = lastQuery; // show it but DO NOT auto-search
+    if (lastQuery) input.value = lastQuery; // do not auto-search
 
     function getSelectedFilters() {
-      const dirs = Array.from(document.querySelectorAll('#dir-filters input:checked')).map(cb => cb.value);
-      const exts = Array.from(document.querySelectorAll('#ext-filters input:checked')).map(cb => cb.value);
-      return { dirs, exts };
+      const dirs    = Array.from(document.querySelectorAll('#dir-filters input:checked')).map(cb => cb.value);
+      const exts    = Array.from(document.querySelectorAll('#ext-filters input:checked')).map(cb => cb.value);
+      const regions = Array.from(document.querySelectorAll('#region-filters input:checked')).map(cb => cb.value);
+      const groups  = Array.from(document.querySelectorAll('#group-filters input:checked')).map(cb => cb.value);
+      return { dirs, exts, regions, groups };
     }
 
     function updateCounts() {
-      const { dirs, exts } = getSelectedFilters();
-      dirCountEl.textContent = `${dirs.length} selected`;
-      extCountEl.textContent = `${exts.length} selected`;
+      const { dirs, exts, regions, groups } = getSelectedFilters();
+      dirCountEl.textContent    = `${dirs.length} selected`;
+      extCountEl.textContent    = `${exts.length} selected`;
+      regionCountEl.textContent = `${regions.length} selected`;
+      groupCountEl.textContent  = `${groups.length} selected`;
     }
 
     // --- Search history
@@ -211,7 +243,7 @@
     input.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
     input.addEventListener('input', () => showSearchHistory(input.value));
 
-    // IMPORTANT: Only run searches on Enter or Search button
+    // Run searches on Enter or Search button
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         currentTerm = input.value.trim();
@@ -240,8 +272,9 @@
     function wireFilterSearch(inputId, listId) {
       const field = document.getElementById(inputId);
       const list = document.getElementById(listId);
+      if (!field || !list) return;
       field.addEventListener('input', () => {
-        const q = field.value.toLowerCase();
+        const q = (field.value || '').toLowerCase();
         list.querySelectorAll('.filter-chip').forEach(chip => {
           const label = chip.getAttribute('data-label') || '';
           chip.style.display = label.includes(q) ? '' : 'none';
@@ -249,51 +282,72 @@
       });
     }
 
-    // Section buttons: Select/Deselect All (scope = dir/ext)
-    document.querySelectorAll('.filter-section-head [data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const scope = btn.getAttribute('data-scope');
-        const action = btn.getAttribute('data-action');
-        const container = document.getElementById(scope === 'dir' ? 'dir-filters' : 'ext-filters');
-        container.querySelectorAll('input[type=checkbox]').forEach(cb => {
-          cb.checked = (action === 'selectAll');
-        });
-        persistFilters();
-        updateCounts();
+    // Section buttons: Select/Deselect All (scope = dir/ext/region/group)
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.filter-section-head [data-action]');
+      if (!btn) return;
+      const scope  = btn.getAttribute('data-scope');
+      const action = btn.getAttribute('data-action');
+      const map = {
+        dir: 'dir-filters',
+        ext: 'ext-filters',
+        region: 'region-filters',
+        group: 'group-filters',
+      };
+      const containerId = map[scope];
+      if (!containerId) return;
+      const container = document.getElementById(containerId);
+      container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.checked = (action === 'selectAll');
       });
+      persistFilters();
+      updateCounts();
     });
 
-    // Select/Deselect All helpers for global window (kept for compatibility)
+    // Global helpers for compatibility (support all scopes)
     window.selectAll = (type) => {
-      const container = document.getElementById(type === 'dir' ? 'dir-filters' : 'ext-filters');
+      const id = (type === 'dir') ? 'dir-filters' :
+                 (type === 'ext') ? 'ext-filters' :
+                 (type === 'region') ? 'region-filters' : 'group-filters';
+      const container = document.getElementById(id);
       container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
       persistFilters();
       updateCounts();
     };
     window.deselectAll = (type) => {
-      const container = document.getElementById(type === 'dir' ? 'dir-filters' : 'ext-filters');
+      const id = (type === 'dir') ? 'dir-filters' :
+                 (type === 'ext') ? 'ext-filters' :
+                 (type === 'region') ? 'region-filters' : 'group-filters';
+      const container = document.getElementById(id);
       container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
       persistFilters();
       updateCounts();
     };
 
-    // Fetch dynamic filters and render (lowercase extensions)
+    // Fetch dynamic filters and render
     fetch('/search/mongo-filters')
       .then(res => res.json())
       .then(data => {
-        const dirs = Array.isArray(data.dirs) ? data.dirs : [];
-        const exts = (Array.isArray(data.exts) ? data.exts : []).map(x => (x || '').toLowerCase());
+        const dirs    = Array.isArray(data.dirs)    ? data.dirs : [];
+        const exts    = (Array.isArray(data.exts)   ? data.exts : []).map(x => (x || '').toLowerCase());
+        const regions = Array.isArray(data.regions) ? data.regions : [];
+        const groups  = (Array.isArray(data.groups) ? data.groups : []).map(x => (x || '').toLowerCase());
 
         renderFilterOptions(dirs, 'dir-filters', selectedDirs);
         renderFilterOptions(exts, 'ext-filters', selectedExts);
+        renderFilterOptions(regions, 'region-filters', selectedRegions);
+        renderFilterOptions(groups, 'group-filters', selectedGroups);
 
-        // Persist on change + counts
-        document.getElementById('dir-filters').addEventListener('change', () => { persistFilters(); updateCounts(); });
-        document.getElementById('ext-filters').addEventListener('change', () => { persistFilters(); updateCounts(); });
+        // Persist on change + counts per section
+        ['dir-filters','ext-filters','region-filters','group-filters'].forEach(id => {
+          const el = document.getElementById(id);
+          el.addEventListener('change', () => { persistFilters(); updateCounts(); });
+        });
 
-        // Wire per-section search fields
+        // Wire per-section search fields (regions has search; dirs/exts already; groups omitted intentionally)
         wireFilterSearch('dir-search', 'dir-filters');
         wireFilterSearch('ext-search', 'ext-filters');
+        wireFilterSearch('region-search', 'region-filters');
 
         // Initial counts
         updateCounts();
@@ -302,12 +356,12 @@
 
     function renderFilterOptions(list, targetId, selected) {
       const container = document.getElementById(targetId);
-      container.innerHTML = list.map(opt => {
+      container.innerHTML = (list || []).map(opt => {
         const val = `${opt}`;
         const checked = selected.includes(val) ? 'checked' : '';
         const labelText = val;
         return `
-          <label class="filter-chip" data-label="${labelText.toLowerCase()}">
+          <label class="filter-chip" data-label="${(labelText || '').toLowerCase()}">
             <input type="checkbox" value="${val}" ${checked}>
             <span class="chip-text" title="${labelText}">${labelText}</span>
           </label>
@@ -316,17 +370,19 @@
     }
 
     function persistFilters() {
-      const { dirs, exts } = getSelectedFilters();
+      const { dirs, exts, regions, groups } = getSelectedFilters();
       localStorage.setItem('mongoDirs', JSON.stringify(dirs));
       localStorage.setItem('mongoExts', JSON.stringify(exts));
+      localStorage.setItem('mongoRegions', JSON.stringify(regions));
+      localStorage.setItem('mongoGroups', JSON.stringify(groups));
     }
 
-    // Core: fetch & render results (filters combined with AND on server)
+    // Core: fetch & render results (server AND-combines all filters)
     const fetchResults = (term, page = 1) => {
       loading.style.visibility = 'visible';
       results.innerHTML = '';
       pager.innerHTML = '';
-      const { dirs, exts } = getSelectedFilters();
+      const { dirs, exts, regions, groups } = getSelectedFilters();
 
       const params = new URLSearchParams({
         q: term || '',
@@ -334,6 +390,8 @@
       });
       dirs.forEach(d => params.append('dirs[]', d));
       exts.forEach(e => params.append('exts[]', e));
+      regions.forEach(r => params.append('regions[]', r));
+      groups.forEach(g => params.append('groups[]', g));
 
       fetch(`/search/mongo?${params.toString()}`)
         .then(r => r.json())
