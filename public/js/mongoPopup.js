@@ -7,7 +7,7 @@
       return;
     }
 
-    const win = window.open('', '_blank', 'width=1100,height=850,resizable=yes,scrollbars=yes');
+    const win = window.open('', '_blank', 'width=1200,height=850,resizable=yes,scrollbars=yes');
     window.mongoPopupWin = win;
 
     // 1) Collect theme attrs + CSS from the OPENER (same-origin)
@@ -20,13 +20,11 @@
     });
 
     const openerStylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-      .map(l => l.href)
-      .filter(Boolean);
-
+      .map(l => l.href).filter(Boolean);
     const openerInlineStyles = Array.from(document.querySelectorAll('style'))
       .map(s => s.textContent || '');
 
-    // 2) Popup markup (now includes Regions + Groups)
+    // 2) Popup markup: header + main (sidebar + content)
     const popupHtml = `
       <div id="mongo-search-popup" class="mongo-popup">
         <div class="mongo-popup-header">
@@ -35,75 +33,89 @@
             <div id="search-history-dropdown" class="dropdown"></div>
           </div>
           <button id="mongo-search-button" class="header-btn">Search</button>
-          <button id="toggle-filters" class="header-btn">Toggle Filters</button>
+          <button id="toggle-filters" class="header-btn" title="Show/Hide Filters">Sidebar</button>
           <button id="mongo-popup-close" class="header-btn" aria-label="Close popup">&times;</button>
         </div>
 
-        <div id="mongo-filters" class="mongo-filters" style="display:block;">
-          <div class="filters-sticky-head">
-            <h4>Filters</h4>
-            <div class="filters-summary">
-              <span id="dir-count" class="count-badge">0 selected</span>
-              <span id="ext-count" class="count-badge">0 selected</span>
-              <span id="region-count" class="count-badge">0 selected</span>
-              <span id="group-count" class="count-badge">0 selected</span>
-            </div>
-          </div>
-
-          <div class="filter-section" data-kind="dir">
-            <div class="filter-section-head">
-              <strong>Directories</strong>
-              <div class="filter-head-actions">
-                <input id="dir-search" class="filter-search" placeholder="Filter directories…" />
-                <button type="button" data-action="selectAll" data-scope="dir">Select All</button>
-                <button type="button" data-action="deselectAll" data-scope="dir">Deselect All</button>
+        <div class="mongo-main">
+          <aside id="mongo-sidebar" class="mongo-sidebar" style="display:block;">
+            <div class="filters-head">
+              <h4>Filters</h4>
+              <div class="filters-summary">
+                <span id="dir-count" class="count-badge">0 selected</span>
+                <span id="ext-count" class="count-badge">0 selected</span>
+                <span id="region-count" class="count-badge">0 selected</span>
+                <span id="group-count" class="count-badge">0 selected</span>
               </div>
             </div>
-            <div id="dir-filters" class="filter-grid"></div>
-          </div>
 
-          <div class="filter-section" data-kind="ext">
-            <div class="filter-section-head">
-              <strong>Extensions</strong>
-              <div class="filter-head-actions">
-                <input id="ext-search" class="filter-search" placeholder="Filter extensions…" />
-                <button type="button" data-action="selectAll" data-scope="ext">Select All</button>
-                <button type="button" data-action="deselectAll" data-scope="ext">Deselect All</button>
-              </div>
+            <div class="accordion">
+
+              <section class="filter-section" data-kind="dir">
+                <button type="button" class="accordion-head" aria-expanded="true">
+                  <strong>Directories</strong><span class="chev">▾</span>
+                </button>
+                <div class="accordion-body" style="display:block;">
+                  <div class="filter-head-actions">
+                    <input id="dir-search" class="filter-search" placeholder="Filter directories…" />
+                    <button type="button" data-action="selectAll" data-scope="dir">Select All</button>
+                    <button type="button" data-action="deselectAll" data-scope="dir">Deselect All</button>
+                  </div>
+                  <div id="dir-filters" class="filter-list"></div>
+                </div>
+              </section>
+
+              <section class="filter-section" data-kind="ext">
+                <button type="button" class="accordion-head" aria-expanded="true">
+                  <strong>Extensions</strong><span class="chev">▾</span>
+                </button>
+                <div class="accordion-body" style="display:block;">
+                  <div class="filter-head-actions">
+                    <input id="ext-search" class="filter-search" placeholder="Filter extensions…" />
+                    <button type="button" data-action="selectAll" data-scope="ext">Select All</button>
+                    <button type="button" data-action="deselectAll" data-scope="ext">Deselect All</button>
+                  </div>
+                  <div id="ext-filters" class="filter-list"></div>
+                </div>
+              </section>
+
+              <section class="filter-section" data-kind="region">
+                <button type="button" class="accordion-head" aria-expanded="true">
+                  <strong>Regions</strong><span class="chev">▾</span>
+                </button>
+                <div class="accordion-body" style="display:block;">
+                  <div class="filter-head-actions">
+                    <input id="region-search" class="filter-search" placeholder="Filter regions…" />
+                    <button type="button" data-action="selectAll" data-scope="region">Select All</button>
+                    <button type="button" data-action="deselectAll" data-scope="region">Deselect All</button>
+                  </div>
+                  <div id="region-filters" class="filter-list"></div>
+                </div>
+              </section>
+
+              <section class="filter-section" data-kind="group">
+                <button type="button" class="accordion-head" aria-expanded="true">
+                  <strong>Groups</strong><span class="chev">▾</span>
+                </button>
+                <div class="accordion-body" style="display:block;">
+                  <div class="filter-head-actions">
+                    <button type="button" data-action="selectAll" data-scope="group">Select All</button>
+                    <button type="button" data-action="deselectAll" data-scope="group">Deselect All</button>
+                  </div>
+                  <div id="group-filters" class="filter-list"></div>
+                </div>
+              </section>
+
             </div>
-            <div id="ext-filters" class="filter-grid"></div>
-          </div>
+          </aside>
 
-          <div class="filter-section" data-kind="region">
-            <div class="filter-section-head">
-              <strong>Regions</strong>
-              <div class="filter-head-actions">
-                <input id="region-search" class="filter-search" placeholder="Filter regions…" />
-                <button type="button" data-action="selectAll" data-scope="region">Select All</button>
-                <button type="button" data-action="deselectAll" data-scope="region">Deselect All</button>
-              </div>
+          <section class="mongo-content">
+            <div id="mongo-pagination" class="mongo-pagination"></div>
+            <div id="mongo-search-results" class="mongo-results"></div>
+            <div id="mongo-search-loading" class="mongo-loading" style="visibility: hidden;">
+              <div class="spinner"></div>
             </div>
-            <div id="region-filters" class="filter-grid"></div>
-          </div>
-
-          <div class="filter-section" data-kind="group">
-            <div class="filter-section-head">
-              <strong>Groups</strong>
-              <div class="filter-head-actions">
-                <button type="button" data-action="selectAll" data-scope="group">Select All</button>
-                <button type="button" data-action="deselectAll" data-scope="group">Deselect All</button>
-              </div>
-            </div>
-            <div id="group-filters" class="filter-grid"></div>
-          </div>
-        </div>
-
-        <div class="mongo-results-wrapper">
-          <div id="mongo-pagination" class="mongo-pagination"></div>
-          <div id="mongo-search-results" class="mongo-results"></div>
-          <div id="mongo-search-loading" class="mongo-loading" style="visibility: hidden;">
-            <div class="spinner"></div>
-          </div>
+          </section>
         </div>
       </div>
     `;
@@ -173,6 +185,7 @@
     const loading   = document.getElementById('mongo-search-loading');
     const searchBtn = document.getElementById('mongo-search-button');
     const toggleBtn = document.getElementById('toggle-filters');
+    const sidebar   = document.getElementById('mongo-sidebar');
 
     const dirCountEl    = document.getElementById('dir-count');
     const extCountEl    = document.getElementById('ext-count');
@@ -183,11 +196,12 @@
     let currentTerm   = '';
     let searchHistory = JSON.parse(localStorage.getItem('mongoSearchHistory') || '[]');
 
-    // restore persisted filters + last query
+    // restore persisted filters + last query + accordion states
     let selectedDirs    = JSON.parse(localStorage.getItem('mongoDirs') || '[]');
     let selectedExts    = JSON.parse(localStorage.getItem('mongoExts') || '[]');
     let selectedRegions = JSON.parse(localStorage.getItem('mongoRegions') || '[]');
     let selectedGroups  = JSON.parse(localStorage.getItem('mongoGroups') || '[]');
+    let accordionsState = JSON.parse(localStorage.getItem('mongoAccordions') || '{}');
     const lastQuery = localStorage.getItem('mongoLastQuery') || '';
     if (lastQuery) input.value = lastQuery; // do not auto-search
 
@@ -205,6 +219,50 @@
       extCountEl.textContent    = `${exts.length} selected`;
       regionCountEl.textContent = `${regions.length} selected`;
       groupCountEl.textContent  = `${groups.length} selected`;
+    }
+
+    // --- NEW: lock sidebar width to the widest label (even when sections collapsed)
+    function lockSidebarWidth() {
+      const sections = Array.from(document.querySelectorAll('.filter-section'));
+      const snapshots = sections.map(sec => {
+        const head = sec.querySelector('.accordion-head');
+        const body = sec.querySelector('.accordion-body');
+        return {
+          body,
+          wasDisplay: body.style.display,
+          wasExpanded: head.getAttribute('aria-expanded') === 'true',
+          chev: head.querySelector('.chev')
+        };
+      });
+
+      // Temporarily show all bodies to measure real widths
+      snapshots.forEach(s => { s.body.style.display = 'block'; });
+
+      // Measure widest label text
+      let maxLabel = 0;
+      document.querySelectorAll('.filter-chip .chip-text').forEach(el => {
+        // getBoundingClientRect is robust across fonts/zoom, includes subpixel
+        const w = el.getBoundingClientRect().width;
+        if (w > maxLabel) maxLabel = w;
+      });
+
+      // Add space for checkbox (~22), gap (8), chip padding (12+12), border, and a small buffer
+      const total = Math.ceil(maxLabel + 22 + 8 + 24 + 4 + 12);
+
+      // Lock width so it never shrinks
+      sidebar.style.width = total + 'px';
+      sidebar.style.minWidth = total + 'px';
+
+      // Restore bodies to original state
+      snapshots.forEach(s => {
+        if (s.wasExpanded) {
+          s.body.style.display = 'block';
+          s.chev.textContent = '▾';
+        } else {
+          s.body.style.display = (s.wasDisplay || 'none');
+          s.chev.textContent = '▸';
+        }
+      });
     }
 
     // --- Search history
@@ -231,7 +289,6 @@
         saveSearchTerm(currentTerm);
         fetchResults(currentTerm, currentPage);
         dropdown.style.display = 'none';
-        document.getElementById('mongo-filters').style.display = 'none';
       } else if (e.target.classList.contains('clear-history')) {
         searchHistory = [];
         localStorage.removeItem('mongoSearchHistory');
@@ -250,7 +307,6 @@
         currentPage = 1;
         saveSearchTerm(currentTerm);
         fetchResults(currentTerm, currentPage);
-        document.getElementById('mongo-filters').style.display = 'none';
       }
     });
 
@@ -260,46 +316,62 @@
       currentPage = 1;
       saveSearchTerm(currentTerm);
       fetchResults(currentTerm, currentPage);
-      document.getElementById('mongo-filters').style.display = 'none';
     });
 
+    // Sidebar toggle
     toggleBtn.addEventListener('click', () => {
-      const box = document.getElementById('mongo-filters');
-      box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+      sidebar.style.display = (sidebar.style.display === 'none') ? 'block' : 'none';
     });
 
-    // Filter search (per section)
-    function wireFilterSearch(inputId, listId) {
-      const field = document.getElementById(inputId);
-      const list = document.getElementById(listId);
-      if (!field || !list) return;
-      field.addEventListener('input', () => {
-        const q = (field.value || '').toLowerCase();
-        list.querySelectorAll('.filter-chip').forEach(chip => {
-          const label = chip.getAttribute('data-label') || '';
-          chip.style.display = label.includes(q) ? '' : 'none';
-        });
+    // Accordion behavior
+    function saveAccordionState() {
+      const state = {};
+      document.querySelectorAll('.filter-section').forEach(sec => {
+        const kind = sec.getAttribute('data-kind');
+        const head = sec.querySelector('.accordion-head');
+        state[kind] = head.getAttribute('aria-expanded') === 'true';
       });
+      localStorage.setItem('mongoAccordions', JSON.stringify(state));
     }
 
-    // Section buttons: Select/Deselect All (scope = dir/ext/region/group)
     document.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.filter-section-head [data-action]');
+      const head = ev.target.closest('.accordion-head');
+      if (!head) return;
+      const body = head.nextElementSibling;
+      const expanded = head.getAttribute('aria-expanded') === 'true';
+      head.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      head.querySelector('.chev').textContent = expanded ? '▸' : '▾';
+      body.style.display = expanded ? 'none' : 'block';
+      saveAccordionState();
+      // Sidebar width stays locked; no need to recompute here
+    });
+
+    // Restore accordion states if present
+    (function restoreAccordion() {
+      if (!accordionsState || typeof accordionsState !== 'object') return;
+      document.querySelectorAll('.filter-section').forEach(sec => {
+        const kind = sec.getAttribute('data-kind');
+        if (accordionsState.hasOwnProperty(kind)) {
+          const show = !!accordionsState[kind];
+          const head = sec.querySelector('.accordion-head');
+          const body = sec.querySelector('.accordion-body');
+          head.setAttribute('aria-expanded', show ? 'true' : 'false');
+          head.querySelector('.chev').textContent = show ? '▾' : '▸';
+          body.style.display = show ? 'block' : 'none';
+        }
+      });
+    })();
+
+    // Section action buttons (Select/Deselect All)
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.filter-head-actions [data-action]');
       if (!btn) return;
       const scope  = btn.getAttribute('data-scope');
       const action = btn.getAttribute('data-action');
-      const map = {
-        dir: 'dir-filters',
-        ext: 'ext-filters',
-        region: 'region-filters',
-        group: 'group-filters',
-      };
-      const containerId = map[scope];
-      if (!containerId) return;
-      const container = document.getElementById(containerId);
-      container.querySelectorAll('input[type=checkbox]').forEach(cb => {
-        cb.checked = (action === 'selectAll');
-      });
+      const map = { dir: 'dir-filters', ext: 'ext-filters', region: 'region-filters', group: 'group-filters' };
+      const container = document.getElementById(map[scope]);
+      if (!container) return;
+      container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = (action === 'selectAll'));
       persistFilters();
       updateCounts();
     });
@@ -324,6 +396,20 @@
       updateCounts();
     };
 
+    // Filter search (per section)
+    function wireFilterSearch(inputId, listId) {
+      const field = document.getElementById(inputId);
+      const list  = document.getElementById(listId);
+      if (!field || !list) return;
+      field.addEventListener('input', () => {
+        const q = (field.value || '').toLowerCase();
+        list.querySelectorAll('.filter-chip').forEach(chip => {
+          const label = chip.getAttribute('data-label') || '';
+          chip.style.display = label.includes(q) ? '' : 'none';
+        });
+      });
+    }
+
     // Fetch dynamic filters and render
     fetch('/search/mongo-filters')
       .then(res => res.json())
@@ -344,13 +430,17 @@
           el.addEventListener('change', () => { persistFilters(); updateCounts(); });
         });
 
-        // Wire per-section search fields (regions has search; dirs/exts already; groups omitted intentionally)
         wireFilterSearch('dir-search', 'dir-filters');
         wireFilterSearch('ext-search', 'ext-filters');
         wireFilterSearch('region-search', 'region-filters');
 
-        // Initial counts
         updateCounts();
+
+        // ✅ Lock the sidebar width to the widest label (even if collapsed)
+        lockSidebarWidth();
+
+        // Also recalc once more after fonts finish loading (some browsers adjust width)
+        window.addEventListener('load', () => setTimeout(lockSidebarWidth, 0));
       })
       .catch(console.error);
 

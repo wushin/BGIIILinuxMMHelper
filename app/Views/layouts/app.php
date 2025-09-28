@@ -49,7 +49,7 @@ $title = $title ?? 'BG3 Linux Helper';
     <div class="hdr-left">
       <a class="navbtn <?= (uri_string()==='')?'active':'' ?>" href="<?= site_url('/') ?>">Home</a>
       <a class="navbtn <?= str_starts_with(uri_string(),'mods')?'active':'' ?>" href="<?= site_url('mods/MyMods/') ?>">Mods</a>
-      <button class="navbtn" id="btn-game-data">Game Data</button>
+      <a class="navbtn" id="btn-game-data" href="#">Search</a>
     </div>
 
     <!-- MIDDLE: Title (page supplies $title) -->

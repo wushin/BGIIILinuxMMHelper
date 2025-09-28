@@ -1,6 +1,6 @@
 /* /public/css/searchPopup.css */
 
-/* Token defaults (only used if your theme doesn't define them) */
+/* Token defaults */
 :root {
   --bg: var(--surface, #0b0f14);
   --bg-subtle: var(--surface-2, #0f141b);
@@ -9,10 +9,9 @@
   --text-muted: var(--muted, #9fb3c8);
   --border: var(--border, #1e2935);
   --brand: var(--accent, #6cb2ff);
-  /* ✅ explicit yellow for highlights */
   --mark-bg: #ffeb72;
-  --radius: var(--radius, 12px);
-  --radius-sm: calc(var(--radius) * 0.6);
+  --radius: 12px;
+  --radius-sm: 8px;
   --space: 10px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
@@ -69,35 +68,62 @@ html, body {
 }
 .dropdown .history-item:hover, .dropdown .clear-history:hover { background: var(--bg-subtle); }
 
-/* Filters */
-.mongo-filters {
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
-  max-height: 38vh; /* keeps the area compact */
-  overflow: auto;
+/* MAIN LAYOUT: sidebar (filters) + content (results) */
+.mongo-main {
+  flex: 1;
+  display: flex;
+  min-height: 0; /* allow children to overflow properly */
 }
 
-.filters-sticky-head {
+/* Sidebar */
+.mongo-sidebar {
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--border);
+  overflow: auto;
+  padding: 8px;
+  white-space: nowrap;        /* ❗ no word wrap */
+  width: max-content;         /* ❗ width fits the longest option text */
+  max-height: calc(100vh - 60px);
+}
+
+.filters-head {
   position: sticky; top: 0; z-index: 2;
   background: var(--bg-subtle);
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px var(--space);
+  padding: 8px 4px;
   border-bottom: 1px solid var(--border);
 }
-.filters-summary { display: flex; gap: 8px; }
+.filters-head h4 { margin: 0 0 6px 0; font-size: 0.95rem; }
+.filters-summary { display: flex; gap: 6px; flex-wrap: nowrap; }
 .count-badge {
   font-size: 12px; color: var(--text-muted);
   padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel);
 }
 
-.filter-section { padding: 10px var(--space); }
-.filter-section + .filter-section { border-top: 1px solid var(--border); }
-
-.filter-section-head {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px;
+/* Accordion */
+.accordion { padding-top: 6px; }
+.accordion-head {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  margin-top: 8px;
 }
-.filter-section-head strong { font-size: 0.95rem; color: var(--text); }
-.filter-head-actions { display: flex; gap: 8px; align-items: center; }
+.accordion-head:hover { border-color: var(--brand); }
+.accordion-head .chev { opacity: .9; }
+
+.accordion-body {
+  padding: 6px 8px 10px 8px;
+}
+
+.filter-head-actions {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 8px;
+}
 .filter-head-actions button {
   padding: 4px 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
   border-radius: var(--radius-sm); cursor: pointer;
@@ -105,38 +131,41 @@ html, body {
 .filter-head-actions button:hover { border-color: var(--brand); }
 
 .filter-search {
-  width: 240px; max-width: 40vw;
+  width: 100%;
   padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--panel); color: var(--text);
+  white-space: nowrap; /* keep input small unless sidebar grows */
 }
 
-/* Grid of chips */
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
-}
-
+/* Filter list (no wrapping, one item per row) */
+.filter-list { display: block; }
 .filter-chip {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px dashed var(--border);
   color: var(--text);
-  min-height: 32px;
 }
+.filter-chip:last-child { border-bottom: 0; }
 .filter-chip input[type="checkbox"] {
   transform: scale(1.15);
   accent-color: var(--brand);
   cursor: pointer;
 }
 .filter-chip .chip-text {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: visible; text-overflow: clip; white-space: nowrap; /* ❗ show full label, never wrap */
+  font-variant-ligatures: none;
 }
-.filter-chip:hover { border-color: var(--brand); }
+.filter-chip:hover { background: rgba(255,255,255,0.03); }
 
-/* Results area */
-.mongo-results-wrapper { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+/* Content (results) */
+.mongo-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .mongo-pagination { padding: 8px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .mongo-pagination .page-btn {
   margin: 0 2px; padding: 4px 8px; cursor: pointer;
@@ -184,7 +213,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: var
 
 /* Highlighted search term */
 mark {
-  background: var(--mark-bg, #ffeb72);
+  background: var(--mark-bg);
   color: #1a1a1a;
   padding: 0 .15em;
   border-radius: 3px;
