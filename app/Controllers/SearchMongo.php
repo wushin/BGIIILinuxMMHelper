@@ -21,148 +21,142 @@
 namespace App\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
-use Throwable;
+use MongoDB\Client as MongoClient;
 
-/**
- * REST endpoint: /search/mongo?q=term&page=n&dirs[]=slugA&dirs[]=slugB&exts[]=xml&exts[]=lsx&roots[]=GameData
- * - Matches current schema fields: root, slug, rel, abs, ext, kind, size, mtime, raw
- * - Full-text-ish search via case-insensitive regex on raw + path fields
- */
 class SearchMongo extends ResourceController
 {
     protected $format = 'json';
 
-    public function index()
+    public function __construct(private readonly MongoClient $client)
     {
-        set_time_limit(0);
-        ini_set('memory_limit', '-1');
+    }
 
-        $q      = (string) ($this->request->getGet('q') ?? '');
-        $page   = max(1, (int) $this->request->getGet('page'));
-        $per    = max(1, (int) ($this->request->getGet('per') ?? 10)); // default 10
-        $dirs   = $this->request->getGet('dirs');   // array of slugs
-        $exts   = $this->request->getGet('exts');   // array of extensions
-        $roots  = $this->request->getGet('roots');  // array of roots e.g. ['GameData','UnpackedMods']
-
-        // Build filter to match current schema
-        $filter = [];
-
-        if (is_array($roots) && !empty($roots)) {
-            $filter['root'] = ['$in' => array_values(array_filter(array_map('strval', $roots)))];
-        }
-
-        if (is_array($dirs) && !empty($dirs)) {
-            // "dirs" maps to "slug" in the new schema
-            $filter['slug'] = ['$in' => array_values(array_filter(array_map('strval', $dirs)))];
-        }
-
-        if (is_array($exts) && !empty($exts)) {
-            $filter['ext'] = ['$in' => array_values(array_filter(array_map(fn($e)=> strtolower((string)$e), $exts)))];
-        }
-
-        if ($q !== '') {
-            // Case-insensitive regex search across raw + path fields
-            $filter['$or'] = [
-                ['raw' => ['$regex' => $q, '$options' => 'i']],
-                ['rel' => ['$regex' => $q, '$options' => 'i']],
-                ['abs' => ['$regex' => $q, '$options' => 'i']],
-            ];
-        }
-
-        log_message('info', 'Mongo search request', [
-            'q'     => $q,
-            'page'  => $page,
-            'per'   => $per,
-            'filt'  => $filter,
-        ]);
-
-        try {
-            /** @var \MongoDB\Database $db */
-            $col  = service('mongoCollection');
-
-            $opts = [
-                'skip'       => ($page - 1) * $per,
-                'limit'      => $per,
-                'projection' => [
-                    '_id'   => 0,
-                    'root'  => 1,
-                    'slug'  => 1,
-                    'rel'   => 1,
-                    'abs'   => 1,
-                    'ext'   => 1,
-                    'kind'  => 1,
-                    'size'  => 1,
-                    'mtime' => 1,
-                    'raw'   => 1,   // keep for client-side highlighting
-                ],
-                'sort' => [
-                    'root' => 1,
-                    'slug' => 1,
-                    'rel'  => 1,
-                ],
-            ];
-
-            $cursor  = $col->find($filter, $opts);
-            $total   = $col->countDocuments($filter);
-            $results = iterator_to_array($cursor, false);
-
-            return $this->respond([
-                'ok'       => true,
-                'query'    => $q,
-                'filters'  => [
-                    'roots' => $roots ?: [],
-                    'dirs'  => $dirs  ?: [],
-                    'exts'  => $exts  ?: [],
-                ],
-                'page'     => $page,
-                'perPage'  => $per,
-                'total'    => $total,
-                'results'  => $results,
-            ]);
-        } catch (Throwable $e) {
-            log_message('error', 'Mongo search failed: ' . $e->getMessage());
-            return $this->failServerError('Mongo search failed.');
-        }
+    private function col()
+    {
+        $db = $this->client->selectDatabase(config('Mongo')->database);
+        return $db->selectCollection(config('Mongo')->collection ?? 'bg3_files');
     }
 
     /**
-     * GET /search/mongo/filters
-     * Distinct lists matching the new schema.
-     * Returns:
-     * {
-     *   roots: [...],    // GameData, UnpackedMods
-     *   dirs: [...],     // slugs (top-level mod folders under UnpackedMods or pseudo "GameData")
-     *   exts: [...]      // file extensions
-     * }
+     * GET /search/mongo
+     * q, page, dirs[], exts[], regions[], groups[]
+     */
+    public function index()
+    {
+        $q       = trim((string) $this->request->getGet('q'));
+        $page    = max(1, (int) ($this->request->getGet('page') ?? 1));
+        $perPage = 20;
+
+        $dirs    = $this->request->getGet('dirs')    ?? $this->request->getGet('dirs[]');
+        $exts    = $this->request->getGet('exts')    ?? $this->request->getGet('exts[]');
+        $regions = $this->request->getGet('regions') ?? $this->request->getGet('regions[]');
+        $groups  = $this->request->getGet('groups')  ?? $this->request->getGet('groups[]');
+
+        $dirs    = is_array($dirs)    ? array_values(array_unique(array_filter($dirs)))    : [];
+        $exts    = is_array($exts)    ? array_values(array_unique(array_filter($exts)))    : [];
+        $regions = is_array($regions) ? array_values(array_unique(array_filter($regions))) : [];
+        $groups  = is_array($groups)  ? array_values(array_unique(array_filter($groups)))  : [];
+
+        $filterAnd = [];
+
+        if ($q !== '') {
+            // Prefer the text index; falls back to case-insensitive regex on raw if needed
+            $filterAnd[] = ['$or' => [
+                ['$text' => ['$search' => $q]],
+                ['raw'   => ['$regex' => $q, '$options' => 'i']],
+                ['names' => ['$regex' => $q, '$options' => 'i']],
+            ]];
+        }
+
+        if ($dirs)    $filterAnd[] = ['top'           => ['$in' => $dirs]];
+        if ($exts)    $filterAnd[] = ['ext'           => ['$in' => array_map('strtolower', $exts)]];
+        if ($regions) $filterAnd[] = ['lsx.regions'   => ['$in' => $regions]];
+        if ($groups)  $filterAnd[] = ['lsx.groupings' => ['$in' => $groups]];
+
+        $filter = $filterAnd ? ['$and' => $filterAnd] : [];
+
+        $opts = [
+            'skip'  => ($page - 1) * $perPage,
+            'limit' => $perPage,
+            'sort'  => ['mtime' => -1],
+        ];
+
+        // If $text is used, sort by textScore primarily
+        if ($q !== '') {
+            $opts['projection'] = ['score' => ['$meta' => 'textScore'], 'raw' => 1, 'abs' => 1, 'rel' => 1, 'name' => 1, 'top' => 1];
+            $opts['sort']       = ['score' => ['$meta' => 'textScore'], 'mtime' => -1];
+        } else {
+            $opts['projection'] = ['raw' => 1, 'abs' => 1, 'rel' => 1, 'name' => 1, 'top' => 1];
+        }
+
+        $col = $this->col();
+        $cursor = $col->find($filter, $opts);
+        $results = [];
+        foreach ($cursor as $doc) {
+            $filepath = ($doc['top'] ?? '') !== ''
+                ? ($doc['top'] . '/' . ltrim($doc['rel'] ?? $doc['name'], '/'))
+                : ($doc['rel'] ?? $doc['name']);
+
+            $results[] = [
+                'filepath' => $filepath ?? ($doc['abs'] ?? '(unknown)'),
+                'raw'      => $doc['raw'] ?? '',
+            ];
+        }
+
+        $total = $col->countDocuments($filter);
+
+        return $this->respond([
+            'page'    => $page,
+            'perPage' => $perPage,
+            'total'   => $total,
+            'results' => $results,
+        ]);
+    }
+
+    /**
+     * GET /search/mongo-filters
+     * Returns only: dirs, exts, regions, groups
      */
     public function filters()
     {
-        try {
-            /** @var \MongoDB\Database $db */
-            $col  = service('mongoCollection');
+        $col = $this->col();
 
-            $roots = $col->distinct('root');
-            $slugs = $col->distinct('slug');
-            $exts  = $col->distinct('ext');
+        $dirs    = $col->distinct('top', []);
+        $exts    = $col->distinct('ext', []);
+        $regions = $col->distinct('lsx.regions',   [['lsx.regions' => ['$exists' => true]]]);
+        $groups  = $col->distinct('lsx.groupings', [['lsx.groupings' => ['$exists' => true]]]);
 
-            // Normalize & sort
-            $roots = array_values(array_filter(array_map('strval', $roots)));
-            $slugs = array_values(array_filter(array_map('strval', $slugs)));
-            $exts  = array_values(array_unique(array_map('strtolower', array_filter($exts))));
+        // normalize + sort
+        $dirs    = $this->cleanList($dirs);
+        $exts    = array_map('strtolower', $this->cleanList($exts));
+        $regions = $this->cleanList($regions);
+        $groups  = $this->cleanList($groups);
 
-            sort($roots, SORT_NATURAL | SORT_FLAG_CASE);
-            sort($slugs, SORT_NATURAL | SORT_FLAG_CASE);
-            sort($exts,  SORT_NATURAL | SORT_FLAG_CASE);
+        sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
+        sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
+        sort($regions, SORT_NATURAL | SORT_FLAG_CASE);
+        sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
 
-            return $this->response->setJSON([
-                'roots' => $roots,
-                'dirs'  => $slugs, // keep key name "dirs" for the UI; values are slugs in new schema
-                'exts'  => $exts,
-            ]);
-        } catch (Throwable $e) {
-            log_message('error', 'Mongo filters failed: ' . $e->getMessage());
-            return $this->failServerError('Failed to fetch filter options');
+        return $this->respond([
+            'dirs'    => $dirs,
+            'exts'    => $exts,
+            'regions' => $regions,
+            'groups'  => $groups,
+        ]);
+    }
+
+    private function cleanList($arr): array
+    {
+        $out = [];
+        foreach ((array) $arr as $v) {
+            if ($v === null) continue;
+            $s = trim((string) $v);
+            if ($s === '') continue;
+            // Drop dot-prefixed names from filters defensively
+            if ($s[0] === '.') continue;
+            $out[$s] = true;
         }
+        return array_keys($out);
     }
 }
 ?>

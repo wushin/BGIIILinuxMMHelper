@@ -128,7 +128,7 @@ class Services extends BaseService
         $kinds = static::mimeGuesser(false);
         $mcfg  = config(\Config\Mongo::class);
         $bg3   = config(\Config\BG3Paths::class);
-        return new \App\Services\MongoIndexer($mongo, $paths, $kinds, $mcfg, $bg3);
+        return new \App\Services\MongoIndexer($mongo, $bg3, $mcfg);
     }
 
 }

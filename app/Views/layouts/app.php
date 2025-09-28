@@ -181,6 +181,7 @@ $title = $title ?? 'BG3 Linux Helper';
 </script>
 
 <script src="/js/mongoPopup.js" />
+<script src="/js/bg3.js" />
 
 <?= $this->renderSection('scripts') ?>
 </body>
