@@ -19,9 +19,11 @@ use CodeIgniter\Config\Services;
  * Indexed-only (not filter-exposed): name, uuids, cuids
  * Ignores dotfiles anywhere in the path.
  */
-class MongoIndexer {
+class MongoIndexer
+{
     /** @var string[] */
     private array $allowedTextExts = ['txt','khn','xml','lsx','ann','anc','cln','clc'];
+
     private LoggerInterface $log;
 
     public function __construct(
@@ -108,7 +110,9 @@ class MongoIndexer {
                 if ($name[0] === '.' || preg_match('~(?:^|[\\/])\\.[^\\/]+~', $abs)) continue;
 
                 $ext   = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-                $size  = $file->getSize();
+                                // Strict allow-list: skip anything not text
+                if (!in_array($ext, $this->allowedTextExts, true)) { continue; }
+$size  = $file->getSize();
                 $mtime = $file->getMTime();
 
                 // Rel + top (first segment only when there IS a segment)
@@ -119,7 +123,7 @@ class MongoIndexer {
                 $slug  = strtolower(preg_replace('/[^a-zA-Z0-9_.-]+/', '-', $name));
 
                 // Text-like?
-                $isTextLike = in_array($ext, $this->allowedTextExts, true);
+                $isTextLike = in_array($ext, ['txt','khn','xml','lsx','json','ini','cfg','csv','yaml','yml']);
                 $raw   = '';
                 $uuids = [];
                 $cuids = [];
@@ -130,10 +134,6 @@ class MongoIndexer {
                     $raw = @file_get_contents($abs);
                     if ($raw === false) $raw = '';
                     if (strlen($raw) > 5_000_000) $raw = substr($raw, 0, 5_000_000);
-                    // Skip likely-binary files by heuristic (NULs/control chars)
-                    if ($this->isProbablyBinary($raw)) {
-                        continue; // do not index; also keeps ext out of filters
-                    }
 
                     if ($raw !== '') {
                         // UUIDs / ContentUUIDs
@@ -204,27 +204,6 @@ class MongoIndexer {
         $this->scanRoot('MyMods',       $rebuild, $progress);
         $this->scanRoot('UnpackedMods', $rebuild, $progress);
         $this->scanRoot('GameData',     $rebuild, $progress);
-    }
-
-    /**
-     * Heuristic: treat as binary if contains many NULs or excessive control characters.
-     */
-    private function isProbablyBinary(string $buf): bool
-    {
-        if ($buf === '') return false;
-        $len = strlen($buf);
-        $sample = $len > 1024 ? substr($buf, 0, 1024) : $buf;
-        $nul = substr_count($sample, "\0");
-        if ($nul > max(1, (int)($len * 0.01))) return true; // >1% NULs in first KB
-        // count non-printable (excluding common whitespace)
-        $nonPrintable = 0;
-        for ($i = 0, $L = strlen($sample); $i < $L; $i++) {
-            $ord = ord($sample[$i]);
-            if ($ord === 9 || $ord === 10 || $ord === 13) continue; // 	 
- 
-            if ($ord < 32 || $ord === 127) $nonPrintable++;
-        }
-        return $nonPrintable > 60; // heuristic threshold
     }
 }
 ?>

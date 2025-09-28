@@ -20,14 +20,16 @@
 
 namespace App\Controllers;
 
-use CodeIgniter\API\ResponseTrait;
+use CodeIgniter\RESTful\ResourceController;
 use MongoDB\Client as MongoClient;
 use MongoDB\Collection;
 use App\Libraries\LsxHelper;
 
-class SearchMongo extends BaseController {
+class SearchMongo extends ResourceController
+{
     /** @var string[] */
     private array $allowedTextExts = ['txt','khn','xml','lsx','ann','anc','cln','clc'];
+
     protected $format = 'json';
 
     private function col(): Collection
@@ -56,14 +58,21 @@ class SearchMongo extends BaseController {
         $regions = $this->request->getGet('regions') ?? $this->request->getGet('regions[]');
         $groups  = $this->request->getGet('groups')  ?? $this->request->getGet('groups[]');
 
+        $roots   = $this->request->getGet('roots')   ?? $this->request->getGet('roots[]');
+
         $dirs    = is_array($dirs)    ? array_values(array_unique(array_filter($dirs)))    : [];
         $exts    = is_array($exts)    ? array_values(array_unique(array_filter($exts)))    : [];
         $regions = is_array($regions) ? array_values(array_unique(array_filter($regions))) : [];
         $groups  = is_array($groups)  ? array_values(array_unique(array_map('strtolower', array_filter($groups)) )) : [];
+        $roots   = is_array($roots)   ? array_values(array_unique(array_filter($roots)))   : [];
 
         $and = [];
         // Always restrict results to allowed text extensions
         $and[] = ['ext' => ['$in' => $this->allowedTextExts]];
+
+        if ($roots) {
+            $and[] = ['root' => ['$in' => $roots]];
+        }
 
         if ($q !== '') {
             $and[] = ['$or' => [
@@ -80,8 +89,7 @@ class SearchMongo extends BaseController {
         }
 
         if ($exts) {
-            $exts = array_values(array_filter(array_map('strtolower', $exts), fn($e) => in_array($e, $this->allowedTextExts, true)));
-            if ($exts) { $and[] = ['ext' => ['$in' => $exts]]; }
+            $and[] = ['ext' => ['$in' => array_map('strtolower', $exts)]];
         }
 
         // Regions (support BOTH schemas: lsx.region (str) and lsx.regions (arr))
@@ -149,43 +157,47 @@ class SearchMongo extends BaseController {
 
     /** GET /search/mongo-filters — returns dirs, exts, regions, groups (backward-compatible) */
     public function filters()
-    {
-        $col = $this->col();
+{
+    $col = $this->col();
 
-        // Basic filters
-        $dirs = $this->cleanList($col->distinct('top', []));
-        $exts = array_map('strtolower', $this->cleanList($col->distinct('ext', [])));
-        $exts = array_values(array_filter($exts, fn($e) => in_array($e, $this->allowedTextExts, true)));
-        if (!$exts) { $exts = $this->allowedTextExts; }
+    // Only consider allowed text extensions
+    $filter = ['ext' => ['$in' => $this->allowedTextExts]];
 
-        // Regions from BOTH schemas:
-        //   - singular: lsx.region (string)
-        //   - legacy:   lsx.regions (array)
-        $regionsSingular = $this->cleanList($col->distinct('lsx.region', ['lsx.region' => ['$exists' => true, '$ne' => '']]));
-        $regionsArray    = $this->distinctFromArrayField($col, 'lsx.regions');
+    // Basic filters
+    $roots = $this->cleanList($col->distinct('root', $filter));
+    $dirs  = $this->cleanList($col->distinct('top',  $filter));
+    $exts  = array_map('strtolower', $this->cleanList($col->distinct('ext', $filter)));
+    $exts  = array_values(array_filter($exts, fn($e) => in_array($e, $this->allowedTextExts, true)));
+    if (!$exts) { $exts = $this->allowedTextExts; }
 
-        $regions = $this->uniqMerge($regionsSingular, $regionsArray);
+    // Regions from both schemas: lsx.region (string) and lsx.regions (array)
+    $regionsSingular = $this->cleanList($col->distinct('lsx.region', $filter + ['lsx.region' => ['$exists' => true, '$ne' => '']]));
+    $regionsArray    = $this->distinctFromArrayField($col, 'lsx.regions', $filter);
+    $regions         = $this->uniqMerge($regionsSingular, $regionsArray);
 
-        // Groups: prefer stored lsx.group, else derive from region ids via LsxHelper
-        $storedGroups = $this->cleanList($col->distinct('lsx.group', ['lsx.group' => ['$exists' => true, '$ne' => '']]));
-        $derivedGroups = [];
-        foreach ($regions as $r) {
-            $derivedGroups[] = strtolower(LsxHelper::regionGroupFromId($r));
-        }
-        $groups = $this->uniqMerge(array_map('strtolower', $storedGroups), $derivedGroups);
-
-        sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
-        sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
-        sort($regions, SORT_NATURAL | SORT_FLAG_CASE);
-        sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
-
-        return $this->response->setJSON([
-            'dirs'    => $dirs,
-            'exts'    => $exts,
-            'regions' => $regions,        // region ids like "Templates", "Progressions", "DialogBank", …
-            'groups'  => $groups,         // "assets", "dialog", "gameplay", "meta", "unknown"
-        ]);
+    // Groups: prefer stored lsx.group, else derive from regions
+    $storedGroups = $this->cleanList($col->distinct('lsx.group', $filter + ['lsx.group' => ['$exists' => true, '$ne' => '']]));
+    $derivedGroups = [];
+    foreach ($regions as $r) {
+        $derivedGroups[] = strtolower(LsxHelper::regionGroupFromId($r));
     }
+    $groups = $this->uniqMerge(array_map('strtolower', $storedGroups), $derivedGroups);
+
+    sort($roots, SORT_NATURAL | SORT_FLAG_CASE);
+    sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
+    sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
+    sort($regions, SORT_NATURAL | SORT_FLAG_CASE);
+    sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
+
+    return $this->response->setJSON([
+        'roots'   => $roots,
+        'dirs'    => $dirs,
+        'exts'    => $exts,
+        'regions' => $regions,
+        'groups'  => $groups,
+    ]);
+}
+        
 
     /** Collect ALL distinct region ids from both schemas */
     private function allRegionIds(): array
@@ -197,21 +209,26 @@ class SearchMongo extends BaseController {
     }
 
     /** Distinct values from an array field via aggregation (handles legacy lsx.regions) */
-    private function distinctFromArrayField(Collection $col, string $path): array
-    {
-        $pipeline = [
-            ['$match'  => [$path => ['$exists' => true, '$ne' => []]]],
-            ['$project'=> ['v' => '$' . $path]],
-            ['$unwind' => '$v'],
-            ['$match'  => ['v' => ['$type' => 'string', '$ne' => '']]],
-            ['$group'  => ['_id' => null, 'vals' => ['$addToSet' => '$v']]],
-        ];
-        $vals = [];
-        foreach ($col->aggregate($pipeline) as $doc) {
-            $vals = (array)($doc['vals'] ?? []);
-        }
-        return $this->cleanList($vals);
+    private function distinctFromArrayField(Collection $col, string $path, array $preMatch = []): array
+{
+    $matchExpr = [$path => ['$exists' => true, '$ne' => []]];
+    if ($preMatch) {
+        // merge ext filter etc.
+        $matchExpr = array_merge($preMatch, $matchExpr);
     }
+    $pipeline = [
+        ['$match'  => $matchExpr],
+        ['$project'=> ['v' => '$' . $path]],
+        ['$unwind' => '$v'],
+        ['$match'  => ['v' => ['$type' => 'string', '$ne' => '']]],
+        ['$group'  => ['_id' => null, 'vals' => ['$addToSet' => '$v']]],
+    ];
+    $vals = [];
+    foreach ($col->aggregate($pipeline) as $doc) {
+        $vals = (array)($doc['vals'] ?? []);
+    }
+    return $this->cleanList($vals);
+}
 
     /** Utilities */
     private function cleanList($arr): array
