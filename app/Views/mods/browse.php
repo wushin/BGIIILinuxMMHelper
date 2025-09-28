@@ -7,7 +7,7 @@ $path   = $path ?? '';
 $myMods = $myMods ?? [];
 
 /** Render recursive tree nodes */
-function renderTree(array $nodes, int $depth = 0) {
+function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     foreach ($nodes as $n) {
         $indent = $depth * 14;
         $isDir  = !empty($n['isDir']);
@@ -16,13 +16,15 @@ function renderTree(array $nodes, int $depth = 0) {
         $ext    = $n['ext']  ?? '';
 
         $cls = $isDir ? 'node dir' : 'node file ext-'.htmlspecialchars($ext);
+        $isActive = (!$isDir && $selectedRel !== '' && $rel === $selectedRel);
+        if ($isActive) { $cls .= ' active'; }
         echo '<div class="'.$cls.'" data-rel="'.htmlspecialchars($rel).'" style="margin-left:'.$indent.'px">';
         echo $isDir ? '📁 ' : '📄 ';
         echo '<span class="node-label" data-name="'.htmlspecialchars($name).'">'.htmlspecialchars($name).'</span>';
         echo '</div>';
 
         if ($isDir && !empty($n['children']) && is_array($n['children'])) {
-            renderTree($n['children'], $depth+1);
+            renderTree($n['children'], $selectedRel, $depth+1);
         }
     }
 }
@@ -31,6 +33,7 @@ function renderTree(array $nodes, int $depth = 0) {
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('head') ?>
+<meta name="csrf-token" content="<?= csrf_hash() ?>">
 <style>
   :root {
     --left-col: 360px;   /* JS will auto-size this */
@@ -125,12 +128,21 @@ function renderTree(array $nodes, int $depth = 0) {
     border-radius:.35rem; padding:.25rem .5rem; font-size:.85rem; cursor:pointer;
   }
   .btn-icon:hover { background:#111a2a; }
+
+  /* Highlight for the selected file in the tree */
+  .node.active {
+    background: rgba(59, 130, 246, 0.15);
+    outline: 1px solid rgba(59, 130, 246, 0.65);
+    border-radius: 6px;
+  }
+  .node.active .node-label { font-weight: 600; }
+  .tree-panel .node:hover { background: rgba(255, 255, 255, 0.06); }
 </style>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
 
-<div class="mod-wrap" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>">
+<div class="mod-wrap" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>" data-basekey="<?= esc($baseKey ?? '') ?>" data-selectedfile="<?= esc($selectedFile ?? '') ?>">
   <div class="columns">
     <!-- LEFT: MyMods card + Files tree panel -->
     <div id="colLeft">
@@ -166,7 +178,7 @@ function renderTree(array $nodes, int $depth = 0) {
         </div>
         <div class="body">
           <div id="tree">
-            <?php renderTree($tree, 0); ?>
+            <?php renderTree($tree, $selectedFile ?? '', 0); ?>
           </div>
         </div>
       </aside>
@@ -196,9 +208,11 @@ function renderTree(array $nodes, int $depth = 0) {
 <script>
 (function(){
   const rootEl  = document.getElementById('modLayout');
-  const root    = rootEl.dataset.root;
-  const slug    = rootEl.dataset.slug;
-  const tree    = document.getElementById('tree');
+  const root    = rootEl?.dataset?.root || '';
+  const slug    = rootEl?.dataset?.slug || '';
+
+  
+const tree    = document.getElementById('tree');
   const view    = document.getElementById('viewer');
   const meta    = document.getElementById('meta');
   const colLeft = document.getElementById('colLeft');
@@ -227,6 +241,8 @@ function renderTree(array $nodes, int $depth = 0) {
       const data   = await r.json();
 
       meta.innerHTML = badgeBar(data);
+      // persist again on successful load
+      persistSelection(rel); saveLocal(rel);
 
       const kind   = data.kind || 'unknown';
       const ext    = (data.ext || '').toLowerCase();
@@ -263,11 +279,62 @@ function renderTree(array $nodes, int $depth = 0) {
   window.openRel = openRel;
 
   // Open on click (files only)
-  tree.addEventListener('click', (e) => {
+  
+  // Persist selection with CSRF; non-blocking
+  
+  // LocalStorage helpers for persistence fallback
+  function lsKey() {
+    const baseKey = document.getElementById('modLayout')?.dataset?.basekey || '';
+    return baseKey ? ('mods:last:' + baseKey) : '';
+  }
+  function saveLocal(rel) {
+    const k = lsKey();
+    if (k && rel) try { localStorage.setItem(k, rel); } catch (_) {}
+  }
+  function loadLocal() {
+    const k = lsKey();
+    if (!k) return '';
+    try { return localStorage.getItem(k) || ''; } catch (_) { return ''; }
+  }
+function persistSelection(rel) {
+    const baseKey = document.getElementById('modLayout')?.dataset?.basekey || '';
+    if (!baseKey || !rel) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    try {
+      navigator.sendBeacon('/mods/selection', new Blob([new URLSearchParams({
+        '<?= csrf_token() ?>': token,
+        base: baseKey,
+        path: rel
+      })], { type: 'application/x-www-form-urlencoded' }));
+    } catch (e) {
+      fetch('/mods/selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: new URLSearchParams({ '<?= csrf_token() ?>': token, base: baseKey, path: rel })
+      }).catch(()=>{});
+    }
+  }
+tree.addEventListener('click', (e) => {
     const el = e.target.closest('.node');
     if (!el || el.classList.contains('dir')) return;
-    openRel(el.getAttribute('data-rel') || '');
+    document.querySelectorAll('.node.active').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    try { el.scrollIntoView({block:'nearest', inline:'nearest'}); } catch(_) {}
+    const rel = el.getAttribute('data-rel') || '';
+    persistSelection(rel); saveLocal(rel);
+    openRel(rel);
   });
+// Auto-open remembered selection on load (server value or localStorage fallback)
+  (function(){
+    let remembered = document.getElementById('modLayout')?.dataset?.selectedfile || '';
+    if (!remembered) remembered = loadLocal();
+    if (remembered) {
+      const node = document.querySelector('.node[data-rel="' + remembered.replace(/"/g,'\\"') + '"]');
+      if (node) { node.classList.add('active'); try { node.scrollIntoView({block:'nearest', inline:'nearest'}); } catch(_) {} }
+      if (typeof openRel === 'function') openRel(remembered);
+    }
+  })();
+
 
   // Highlight helper for Fetch UUID widgets
   function clearHighlights() {
