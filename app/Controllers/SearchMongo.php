@@ -21,113 +21,145 @@
 namespace App\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
-use MongoDB\Client as MongoClient;
 use Throwable;
 
 /**
- * REST endpoint: /search/mongo?q=term&page=n
- * Returns paginated, full‑text Mongo results (keys + values) with highlighting handled client‑side.
+ * REST endpoint: /search/mongo?q=term&page=n&dirs[]=slugA&dirs[]=slugB&exts[]=xml&exts[]=lsx&roots[]=GameData
+ * - Matches current schema fields: root, slug, rel, abs, ext, kind, size, mtime, raw
+ * - Full-text-ish search via case-insensitive regex on raw + path fields
  */
 class SearchMongo extends ResourceController
 {
-    protected $format = 'json';   // respond() returns JSON
+    protected $format = 'json';
 
     public function index()
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
-        $query = $this->request->getGet('q') ?? '';
-        $page  = max(1, (int) $this->request->getGet('page'));
-        $per   = 5;
-        $dirs  = $this->request->getGet('dirs');
-        $exts = $this->request->getGet('exts');
 
+        $q      = (string) ($this->request->getGet('q') ?? '');
+        $page   = max(1, (int) $this->request->getGet('page'));
+        $per    = max(1, (int) ($this->request->getGet('per') ?? 10)); // default 10
+        $dirs   = $this->request->getGet('dirs');   // array of slugs
+        $exts   = $this->request->getGet('exts');   // array of extensions
+        $roots  = $this->request->getGet('roots');  // array of roots e.g. ['GameData','UnpackedMods']
+
+        // Build filter to match current schema
         $filter = [];
 
-        if ($dirs && is_array($dirs)) {
-            $filter['category'] = ['$in' => $dirs];
+        if (is_array($roots) && !empty($roots)) {
+            $filter['root'] = ['$in' => array_values(array_filter(array_map('strval', $roots)))];
         }
 
-        if ($exts && is_array($exts)) {
-            $filter['extension'] = ['$in' => $exts];
+        if (is_array($dirs) && !empty($dirs)) {
+            // "dirs" maps to "slug" in the new schema
+            $filter['slug'] = ['$in' => array_values(array_filter(array_map('strval', $dirs)))];
         }
 
-        if ($query !== '') {
+        if (is_array($exts) && !empty($exts)) {
+            $filter['ext'] = ['$in' => array_values(array_filter(array_map(fn($e)=> strtolower((string)$e), $exts)))];
+        }
+
+        if ($q !== '') {
+            // Case-insensitive regex search across raw + path fields
             $filter['$or'] = [
-                ['raw' => ['$regex' => $query, '$options' => 'i']],
+                ['raw' => ['$regex' => $q, '$options' => 'i']],
+                ['rel' => ['$regex' => $q, '$options' => 'i']],
+                ['abs' => ['$regex' => $q, '$options' => 'i']],
             ];
         }
 
-        log_message('info', "Mongo search request: '{$query}' (page {$page})". print_r($filter, true));
-
+        log_message('info', 'Mongo search request', [
+            'q'     => $q,
+            'page'  => $page,
+            'per'   => $per,
+            'filt'  => $filter,
+        ]);
 
         try {
-            $client      = new MongoClient('mongodb://bg3mmh-mongo:27017');
-            $collection  = $client->bg3mmh->files;
+            /** @var \MongoDB\Database $db */
+            $col  = service('mongoCollection');
 
             $opts = [
                 'skip'       => ($page - 1) * $per,
                 'limit'      => $per,
                 'projection' => [
-                'filepath' => 1,
-                'raw'      => 1,
+                    '_id'   => 0,
+                    'root'  => 1,
+                    'slug'  => 1,
+                    'rel'   => 1,
+                    'abs'   => 1,
+                    'ext'   => 1,
+                    'kind'  => 1,
+                    'size'  => 1,
+                    'mtime' => 1,
+                    'raw'   => 1,   // keep for client-side highlighting
                 ],
-                'sort' => ['filepath' => 1], // fallback stable sort
+                'sort' => [
+                    'root' => 1,
+                    'slug' => 1,
+                    'rel'  => 1,
+                ],
             ];
 
-            unset($opts['projection']['score']);
-
-            $cursor  = $collection->find($filter, $opts);
-            $total   = $collection->countDocuments($filter);
+            $cursor  = $col->find($filter, $opts);
+            $total   = $col->countDocuments($filter);
             $results = iterator_to_array($cursor, false);
 
             return $this->respond([
-                'results'  => $results,
-                'total'    => $total,
+                'ok'       => true,
+                'query'    => $q,
+                'filters'  => [
+                    'roots' => $roots ?: [],
+                    'dirs'  => $dirs  ?: [],
+                    'exts'  => $exts  ?: [],
+                ],
                 'page'     => $page,
                 'perPage'  => $per,
+                'total'    => $total,
+                'results'  => $results,
             ]);
-
         } catch (Throwable $e) {
             log_message('error', 'Mongo search failed: ' . $e->getMessage());
             return $this->failServerError('Mongo search failed.');
         }
     }
 
+    /**
+     * GET /search/mongo/filters
+     * Distinct lists matching the new schema.
+     * Returns:
+     * {
+     *   roots: [...],    // GameData, UnpackedMods
+     *   dirs: [...],     // slugs (top-level mod folders under UnpackedMods or pseudo "GameData")
+     *   exts: [...]      // file extensions
+     * }
+     */
     public function filters()
     {
         try {
-            $manager = new \MongoDB\Driver\Manager(env('mongo.default.uri'));
-            $dbName = env('mongo.default.db', 'bg3mmh');
+            /** @var \MongoDB\Database $db */
+            $col  = service('mongoCollection');
 
-            $categoriesCmd = new \MongoDB\Driver\Command([
-                'distinct' => 'files',
-                'key' => 'category',
-            ]);
+            $roots = $col->distinct('root');
+            $slugs = $col->distinct('slug');
+            $exts  = $col->distinct('ext');
 
-            $extensionsCmd = new \MongoDB\Driver\Command([
-                'distinct' => 'files',
-                'key' => 'extension',
-            ]);
+            // Normalize & sort
+            $roots = array_values(array_filter(array_map('strval', $roots)));
+            $slugs = array_values(array_filter(array_map('strval', $slugs)));
+            $exts  = array_values(array_unique(array_map('strtolower', array_filter($exts))));
 
-            $categoriesCursor = $manager->executeCommand($dbName, $categoriesCmd);
-            $extensionsCursor = $manager->executeCommand($dbName, $extensionsCmd);
-
-            $categories = $categoriesCursor->toArray()[0]->values ?? [];
-            $extensions = $extensionsCursor->toArray()[0]->values ?? [];
-
-            // Normalize and clean
-            $dirs = array_values(array_filter($categories));
-            $exts = array_values(array_unique(array_map('strtolower', array_filter($extensions))));
-
-            sort($dirs);
-            sort($exts);
+            sort($roots, SORT_NATURAL | SORT_FLAG_CASE);
+            sort($slugs, SORT_NATURAL | SORT_FLAG_CASE);
+            sort($exts,  SORT_NATURAL | SORT_FLAG_CASE);
 
             return $this->response->setJSON([
-                'dirs' => $dirs,
-                'exts' => $exts,
+                'roots' => $roots,
+                'dirs'  => $slugs, // keep key name "dirs" for the UI; values are slugs in new schema
+                'exts'  => $exts,
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             log_message('error', 'Mongo filters failed: ' . $e->getMessage());
             return $this->failServerError('Failed to fetch filter options');
         }

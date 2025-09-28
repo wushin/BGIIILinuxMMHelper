@@ -94,5 +94,42 @@ class Services extends BaseService
 
         return new MarkdownConverter($env);
     }
+
+    // Mongo client
+    public static function mongo(bool $getShared = true): \MongoDB\Client
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mongo');
+        }
+        $cfg = config(\Config\Mongo::class);
+        return new \MongoDB\Client($cfg->uri, $cfg->clientOptions, $cfg->driverOptions);
+    }
+
+    // Mongo Collection
+    public static function mongoCollection(bool $getShared = true): \MongoDB\Collection
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mongoCollection');
+        }
+        $cfg = config(\Config\Mongo::class);
+        $client = static::mongo(false);
+        $client_db = $client->selectDatabase($cfg->db);
+        return $client_db->selectCollection($cfg->collection);
+    }
+
+    // Mongo indexer
+    public static function mongoIndexer(bool $getShared = true): \App\Services\MongoIndexer
+    {
+        if ($getShared) {
+            return static::getSharedInstance('mongoIndexer');
+        }
+        $mongo = static::mongo(false);
+        $paths = static::pathResolver(false);
+        $kinds = static::mimeGuesser(false);
+        $mcfg  = config(\Config\Mongo::class);
+        $bg3   = config(\Config\BG3Paths::class);
+        return new \App\Services\MongoIndexer($mongo, $paths, $kinds, $mcfg, $bg3);
+    }
+
 }
 ?>

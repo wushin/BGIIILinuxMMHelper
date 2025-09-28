@@ -20,122 +20,62 @@
 
 namespace App\Commands;
 
-ini_set('memory_limit', '-1');
-set_time_limit(0);
-
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
-use MongoDB\Client as MongoClient;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 
+/**
+ * Rebuild / refresh Mongo index for UnpackedMods and/or GameData
+ *
+ * Usage:
+ *   php spark mongoindex:scan
+ *   php spark mongoindex:scan --root GameData
+ *   php spark mongoindex:scan --root UnpackedMods
+ *   php spark mongoindex:scan --root all --rebuild
+ */
 class MongoIndex extends BaseCommand
 {
-    protected $group       = 'bg3mmh';
+    protected $group       = 'BG3';
     protected $name        = 'mongoindex:scan';
-    protected $description = 'Scans and indexes game data files into MongoDB.';
-    protected $usage       = 'mongoindex:scan [--sync] [--rebuild]';
-
-    protected $options = [
-        '--sync'    => 'Only update changed or new files.',
-        '--rebuild' => 'Clear and re-import everything.',
-    ];
+    protected $description = 'Scan configured roots into MongoDB (UnpackedMods, GameData).';
+    protected $usage       = 'mongoindex:scan [--root=all|GameData|UnpackedMods] [--rebuild]';
 
     public function run(array $params)
     {
-        helper(['filesystem']);
+        $root    = CLI::getOption('root')    ?? 'all';
+        $rebuild = (bool) CLI::getOption('rebuild');
 
-        $gameDataPath = env('bg3LinuxHelper.GameData');
-        if (!$gameDataPath || !is_dir($gameDataPath)) {
-            log_message('error', 'Invalid or missing GameData path: ' . $gameDataPath);
-            CLI::error('Invalid GameData path.');
-            return;
+        /** @var \App\Services\MongoIndexer $indexer */
+        $indexer = service('mongoIndexer');
+
+        $progress = function (int $n) {
+            CLI::write("  indexed: {$n}", 'green');
+        };
+
+        switch (strtolower($root)) {
+            case 'alldata':
+            case 'all':
+                CLI::write('Scanning: UnpackedMods', 'yellow');
+                $indexer->scanRoot('UnpackedMods', $rebuild, $progress);
+                CLI::write('Scanning: GameData', 'yellow');
+                $indexer->scanRoot('GameData', $rebuild, $progress);
+                break;
+
+            case 'gamedata':
+                CLI::write('Scanning: GameData', 'yellow');
+                $indexer->scanRoot('GameData', $rebuild, $progress);
+                break;
+
+            case 'unpackedmods':
+                CLI::write('Scanning: UnpackedMods', 'yellow');
+                $indexer->scanRoot('UnpackedMods', $rebuild, $progress);
+                break;
+
+            default:
+                CLI::error("Unknown --root value: {$root}");
+                return;
         }
 
-        $syncMode = in_array('--sync', $params);
-        $rebuildMode = in_array('--rebuild', $params);
-
-        try {
-            $mongo = new MongoClient('mongodb://bg3mmh-mongo:27017');
-            $collection = $mongo->bg3mmh->files;
-
-            if ($rebuildMode) {
-                $collection->drop();
-                log_message('info', 'MongoDB collection dropped for rebuild.');
-            }
-
-            $iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($gameDataPath, RecursiveDirectoryIterator::SKIP_DOTS)
-            );
-
-            foreach ($iterator as $fileInfo) {
-                $filePath = $fileInfo->getPathname();
-                $extension = strtolower($fileInfo->getExtension());
-
-                // Limit to known formats
-                if (!in_array($extension, ['xml', 'lsx', 'txt', 'khn'])) {
-                    continue;
-                }
-
-                $hash = md5_file($filePath);
-                $existing = $collection->findOne(['filepath' => $filePath]);
-
-                if ($syncMode && $existing && $existing['hash'] === $hash) {
-                    log_message('info', "Unchanged, skipping: {$filePath}");
-                    continue;
-                }
-
-                $relativePath = str_replace($gameDataPath . '/', '', $filePath);
-                $parts = explode('/', $relativePath);
-                $category = strtolower($parts[0] ?? 'unknown');
-                $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-                $raw = service('contentService')->read($filePath);
-
-                $data = [
-                    'filepath'   => $relativePath,
-                    'filename'   => basename($filePath),
-                    'extension'  => strtolower(pathinfo($filePath, PATHINFO_EXTENSION)),
-                    'category'   => $category,
-                    'hash'       => md5_file($filePath),
-                    'indexed_at' => date(DATE_ATOM),
-                    'raw'        => $raw,
-                ];
-
-                try {
-                    if (filesize($filePath) > 16777216) { // 16 MB
-                      log_message('warning', "Skipping large file: {$filePath}");
-                      continue;
-                    }
-                    $content = service('contentService')->read($filePath);
-
-                    $data['raw'] = $content;
-
-                    $collection->replaceOne(
-                        ['filepath' => $filePath],
-                        $data,
-                        ['upsert' => true]
-                    );
-
-                    log_message('info', "Indexed: {$filePath}");
-                } catch (\Throwable $e) {
-                    log_message('error', "Failed to read {$filePath}: " . $e->getMessage());
-                }
-            }
-
-            CLI::write('Indexing complete.', 'green');
-            log_message('info', 'MongoDB indexing complete.');
-            try {
-                $collection->createIndex(['raw' => 'text']);
-                log_message('info', 'MongoDB text index on `raw` created (or already exists).');
-            } catch (\Throwable $e) {
-                log_message('error', 'Failed to create text index on `raw`: ' . $e->getMessage());
-            }
-
-        } catch (\Throwable $e) {
-            log_message('error', 'MongoDB connection or operation failed: ' . $e->getMessage());
-            CLI::error('MongoDB indexing failed.');
-        }
+        CLI::write('Done.', 'green');
     }
 }
-
+?>
