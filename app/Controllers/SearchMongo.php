@@ -164,8 +164,27 @@ class SearchMongo extends ResourceController
     $filter = ['ext' => ['$in' => $this->allowedTextExts]];
 
     // Basic filters
-    $roots = $this->cleanList($col->distinct('root', $filter));
-    $dirs  = $this->cleanList($col->distinct('top',  $filter));
+    $unpacked = [
+        ['$match' => ['root' => 'UnpackedMods']],
+        ['$group' => ['_id' => ['top' => '$top']]],
+    ];
+    $cursor = $col->aggregate($unpacked, ['allowDiskUse' => true]);
+    foreach ($cursor as $doc) {
+      if (!empty($doc['_id']['top'])) {
+        $dirs['UnpackedMods'][] = $doc['_id']['top'];
+      }
+    }
+
+    $gamedata = [
+        ['$match' => ['root' => 'GameData']],
+        ['$group' => ['_id' => ['top' => '$top']]],
+    ];
+    $cursor = $col->aggregate($gamedata, ['allowDiskUse' => true]);
+    foreach ($cursor as $doc) {
+      if (!empty($doc['_id']['top'])) {
+        $dirs['GameData'][] = $doc['_id']['top'];
+      }
+    }
     $exts  = array_map('strtolower', $this->cleanList($col->distinct('ext', $filter)));
     $exts  = array_values(array_filter($exts, fn($e) => in_array($e, $this->allowedTextExts, true)));
     if (!$exts) { $exts = $this->allowedTextExts; }
@@ -183,18 +202,15 @@ class SearchMongo extends ResourceController
     }
     $groups = $this->uniqMerge(array_map('strtolower', $storedGroups), $derivedGroups);
 
-    sort($roots, SORT_NATURAL | SORT_FLAG_CASE);
-    sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
     sort($exts, SORT_NATURAL | SORT_FLAG_CASE);
     sort($regions, SORT_NATURAL | SORT_FLAG_CASE);
     sort($groups, SORT_NATURAL | SORT_FLAG_CASE);
 
     return $this->response->setJSON([
-        'roots'   => $roots,
-        'dirs'    => $dirs,
-        'exts'    => $exts,
-        'regions' => $regions,
-        'groups'  => $groups,
+        'dirsByRoot'  => $dirs,
+        'exts'        => $exts,
+        'regions'     => $regions,
+        'groups'      => $groups,
     ]);
 }
         

@@ -1,4 +1,9 @@
-/* /public/js/mongoPopup.js */
+
+/* /public/js/mongoPopup.js — keep existing popup behavior & CSS
+   CHANGE: consume dirsByRoot/dirByRoot from /search/mongo-filters
+           (no more roots/dirs at the API level). We flatten all root arrays
+           into a single "Directories" list to preserve the current UI.
+*/
 (function () {
   // --- PUBLIC: called by your "Game Data" button
   window.toggleMongoPopup = () => {
@@ -42,10 +47,11 @@
             <div class="filters-head">
               <h4>Filters</h4>
               <div class="filters-summary">
-                <span id="dir-count" class="count-badge">0 selected</span>
-                <span id="ext-count" class="count-badge">0 selected</span>
-                <span id="region-count" class="count-badge">0 selected</span>
-                <span id="group-count" class="count-badge">0 selected</span>
+                <span id="root-count" class="count-badge">0 Roots</span>
+                <span id="dir-count" class="count-badge">0 Dirs</span>
+                <span id="ext-count" class="count-badge">0 Exts</span>
+                <span id="region-count" class="count-badge">0 Regions</span>
+                <span id="group-count" class="count-badge">0 Groups</span>
               </div>
             </div>
 
@@ -187,6 +193,7 @@
     const toggleBtn = document.getElementById('toggle-filters');
     const sidebar   = document.getElementById('mongo-sidebar');
 
+    const rootCountEl  = document.getElementById('root-count');
     const dirCountEl    = document.getElementById('dir-count');
     const extCountEl    = document.getElementById('ext-count');
     const regionCountEl = document.getElementById('region-count');
@@ -205,23 +212,33 @@
     const lastQuery = localStorage.getItem('mongoLastQuery') || '';
     if (lastQuery) input.value = lastQuery; // do not auto-search
 
-    function getSelectedFilters() {
-      const dirs    = Array.from(document.querySelectorAll('#dir-filters input:checked')).map(cb => cb.value);
+    function getSelectedFilters(){
+      // root = first-level under dirsByRoot, rendered as checkboxes with data-root-toggle="1"
+      const roots = Array.from(
+        document.querySelectorAll('#dir-filters input[data-root-toggle="1"]:checked')
+      ).map(cb => cb.value);
+
+      const dirs    = Array.from(document.querySelectorAll('#dir-filters .root-children input[type=checkbox]:checked')).map(cb => cb.value);
       const exts    = Array.from(document.querySelectorAll('#ext-filters input:checked')).map(cb => cb.value);
       const regions = Array.from(document.querySelectorAll('#region-filters input:checked')).map(cb => cb.value);
       const groups  = Array.from(document.querySelectorAll('#group-filters input:checked')).map(cb => cb.value);
-      return { dirs, exts, regions, groups };
+
+      return { roots, dirs, exts, regions, groups };
     }
 
     function updateCounts() {
+      const roots = Array.from(
+        document.querySelectorAll('#dir-filters input[data-root-toggle="1"]:checked')
+      );
       const { dirs, exts, regions, groups } = getSelectedFilters();
-      dirCountEl.textContent    = `${dirs.length} selected`;
-      extCountEl.textContent    = `${exts.length} selected`;
-      regionCountEl.textContent = `${regions.length} selected`;
-      groupCountEl.textContent  = `${groups.length} selected`;
+      if (rootCountEl)  rootCountEl.textContent  = `${roots.length} Roots`;
+      dirCountEl.textContent    = `${dirs.length} Dirs`;
+      extCountEl.textContent    = `${exts.length} Exts`;
+      regionCountEl.textContent = `${regions.length} Regions`;
+      groupCountEl.textContent  = `${groups.length} Groups`;
     }
 
-    // --- NEW: lock sidebar width to the widest label (even when sections collapsed)
+    // --- lock sidebar width to the widest label (even when sections collapsed)
     function lockSidebarWidth() {
       const sections = Array.from(document.querySelectorAll('.filter-section'));
       const snapshots = sections.map(sec => {
@@ -241,15 +258,12 @@
       // Measure widest label text
       let maxLabel = 0;
       document.querySelectorAll('.filter-chip .chip-text').forEach(el => {
-        // getBoundingClientRect is robust across fonts/zoom, includes subpixel
         const w = el.getBoundingClientRect().width;
         if (w > maxLabel) maxLabel = w;
       });
 
-      // Add space for checkbox (~22), gap (8), chip padding (12+12), border, and a small buffer
       const total = Math.ceil(maxLabel + 22 + 8 + 24 + 4 + 12);
 
-      // Lock width so it never shrinks
       sidebar.style.width = total + 'px';
       sidebar.style.minWidth = total + 'px';
 
@@ -311,7 +325,7 @@
     });
 
     // Buttons
-    searchBtn.addEventListener('click', () => {
+    document.getElementById('mongo-search-button').addEventListener('click', () => {
       currentTerm = input.value.trim();
       currentPage = 1;
       saveSearchTerm(currentTerm);
@@ -319,7 +333,7 @@
     });
 
     // Sidebar toggle
-    toggleBtn.addEventListener('click', () => {
+    document.getElementById('toggle-filters').addEventListener('click', () => {
       sidebar.style.display = (sidebar.style.display === 'none') ? 'block' : 'none';
     });
 
@@ -343,16 +357,16 @@
       head.querySelector('.chev').textContent = expanded ? '▸' : '▾';
       body.style.display = expanded ? 'none' : 'block';
       saveAccordionState();
-      // Sidebar width stays locked; no need to recompute here
     });
 
     // Restore accordion states if present
     (function restoreAccordion() {
-      if (!accordionsState || typeof accordionsState !== 'object') return;
+      let acc = {};
+      try { acc = JSON.parse(localStorage.getItem('mongoAccordions') || '{}'); } catch {}
       document.querySelectorAll('.filter-section').forEach(sec => {
         const kind = sec.getAttribute('data-kind');
-        if (accordionsState.hasOwnProperty(kind)) {
-          const show = !!accordionsState[kind];
+        if (acc && Object.prototype.hasOwnProperty.call(acc, kind)) {
+          const show = !!acc[kind];
           const head = sec.querySelector('.accordion-head');
           const body = sec.querySelector('.accordion-body');
           head.setAttribute('aria-expanded', show ? 'true' : 'false');
@@ -376,26 +390,6 @@
       updateCounts();
     });
 
-    // Global helpers for compatibility (support all scopes)
-    window.selectAll = (type) => {
-      const id = (type === 'dir') ? 'dir-filters' :
-                 (type === 'ext') ? 'ext-filters' :
-                 (type === 'region') ? 'region-filters' : 'group-filters';
-      const container = document.getElementById(id);
-      container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
-      persistFilters();
-      updateCounts();
-    };
-    window.deselectAll = (type) => {
-      const id = (type === 'dir') ? 'dir-filters' :
-                 (type === 'ext') ? 'ext-filters' :
-                 (type === 'region') ? 'region-filters' : 'group-filters';
-      const container = document.getElementById(id);
-      container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-      persistFilters();
-      updateCounts();
-    };
-
     // Filter search (per section)
     function wireFilterSearch(inputId, listId) {
       const field = document.getElementById(inputId);
@@ -410,36 +404,81 @@
       });
     }
 
-    // Fetch dynamic filters and render
+    // === FETCH FILTERS (render roots first; expand children only when checked) ===
     fetch('/search/mongo-filters')
       .then(res => res.json())
       .then(data => {
-        const dirs    = Array.isArray(data.dirs)    ? data.dirs : [];
-        const exts    = (Array.isArray(data.exts)   ? data.exts : []).map(x => (x || '').toLowerCase());
-        const regions = Array.isArray(data.regions) ? data.regions : [];
-        const groups  = (Array.isArray(data.groups) ? data.groups : []).map(x => (x || '').toLowerCase());
+        const dirsByRoot = (data && (data.dirsByRoot || data.dirByRoot)) || {};
 
-        renderFilterOptions(dirs, 'dir-filters', selectedDirs);
-        renderFilterOptions(exts, 'ext-filters', selectedExts);
+        // Restore any previously selected dirs (we already read selectedDirs above)
+        // Optional: restore selected roots based on whether any child was selected.
+        const selectedRoots = {};
+        Object.keys(dirsByRoot).forEach(root => {
+          selectedRoots[root] = (selectedDirs || []).some(d => (dirsByRoot[root] || []).includes(d));
+        });
+
+        renderDirByRoot(dirsByRoot, 'dir-filters', selectedDirs, selectedRoots);
+
+        const exts    = Array.isArray(data.exts)    ? data.exts.map(x => String(x||'').toLowerCase()) : [];
+        const regions = Array.isArray(data.regions) ? data.regions : [];
+        const groups  = Array.isArray(data.groups)  ? data.groups.map(x => String(x||'').toLowerCase()) : [];
+
+        renderFilterOptions(exts,    'ext-filters',    selectedExts);
         renderFilterOptions(regions, 'region-filters', selectedRegions);
-        renderFilterOptions(groups, 'group-filters', selectedGroups);
+        renderFilterOptions(groups,  'group-filters',  selectedGroups);
 
         // Persist on change + counts per section
-        ['dir-filters','ext-filters','region-filters','group-filters'].forEach(id => {
+        ['ext-filters','region-filters','group-filters'].forEach(id => {
           const el = document.getElementById(id);
           el.addEventListener('change', () => { persistFilters(); updateCounts(); });
         });
 
+        // Directories need special wiring (roots/children)
+        document.getElementById('dir-filters').addEventListener('change', (e) => {
+          const rootToggle = e.target.closest('input[data-root-toggle="1"]');
+          if (rootToggle) {
+            const root = rootToggle.value;
+            const kids = document.querySelector(`#root-${cssId(root)} .root-children`);
+            const open = !!rootToggle.checked;
+            kids.style.display = open ? 'block' : 'none';
+            if (!open) {
+              // uncheck all children when collapsing a root
+              kids.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+            }
+            persistFilters();
+            updateCounts();
+            return;
+          }
+          // children checkbox changed
+          persistFilters();
+          updateCounts();
+        });
+
+        // Wire searches (dir search should only affect visible children)
         wireFilterSearch('dir-search', 'dir-filters');
         wireFilterSearch('ext-search', 'ext-filters');
         wireFilterSearch('region-search', 'region-filters');
 
+        // Make Select All / Deselect All only touch VISIBLE directory children
+        document.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('.filter-head-actions [data-action]');
+          if (!btn) return;
+          const scope  = btn.getAttribute('data-scope');
+          const action = btn.getAttribute('data-action');
+          if (scope === 'dir') {
+            const container = document.getElementById('dir-filters');
+            container.querySelectorAll('.root-children input[type=checkbox]').forEach(cb => {
+              if (cb.offsetParent !== null) cb.checked = (action === 'selectAll');
+            });
+            persistFilters();
+            updateCounts();
+          }
+        });
+
         updateCounts();
 
-        // ✅ Lock the sidebar width to the widest label (even if collapsed)
+        // Lock the sidebar width AFTER rendering (keeps your CSS intact)
         lockSidebarWidth();
-
-        // Also recalc once more after fonts finish loading (some browsers adjust width)
         window.addEventListener('load', () => setTimeout(lockSidebarWidth, 0));
       })
       .catch(console.error);
@@ -459,6 +498,46 @@
       }).join('');
     }
 
+    function cssId(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-'); }
+
+    function renderDirByRoot(dirsByRoot, targetId, selectedDirs, selectedRoots) {
+      const container = document.getElementById(targetId);
+      const roots = Object.keys(dirsByRoot || {}).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+      if (!roots.length) { container.innerHTML = '<div class="muted">No directories.</div>'; return; }
+
+      container.innerHTML = roots.map(root => {
+        const id = `root-${cssId(root)}`;
+        const open = !!selectedRoots[root];
+        const children = (dirsByRoot[root] || []).slice().sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+
+        const childHtml = children.map(dir => {
+          const checked = (selectedDirs || []).includes(dir) ? 'checked' : '';
+          return `
+            <label class="filter-chip" data-label="${(dir || '').toLowerCase()}">
+              <input type="checkbox" value="${dir}" ${checked}>
+              <span class="chip-text" title="${dir}">${dir}</span>
+            </label>
+          `;
+        }).join('');
+
+        return `
+          <div id="${id}" class="dir-root">
+            <label class="filter-chip root-row" data-label="${root.toLowerCase()}">
+              <input type="checkbox" value="${root}" data-root-toggle="1" ${open ? 'checked' : ''}>
+              <span class="chip-text" title="${root}">${root}</span>
+            </label>
+            <div class="root-children" style="display:${open ? 'block' : 'none'};">
+              ${childHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const getSelectedRoots = () =>
+        Array.from(document.querySelectorAll('#dir-filters input[data-root-toggle="1"]:checked'))
+            .map(cb => cb.value);
+
     function persistFilters() {
       const { dirs, exts, regions, groups } = getSelectedFilters();
       localStorage.setItem('mongoDirs', JSON.stringify(dirs));
@@ -472,12 +551,16 @@
       loading.style.visibility = 'visible';
       results.innerHTML = '';
       pager.innerHTML = '';
+
       const { dirs, exts, regions, groups } = getSelectedFilters();
+      const roots = getSelectedRoots();                     // <-- ADDED
 
       const params = new URLSearchParams({
         q: term || '',
         page: page || 1
       });
+
+      roots.forEach(r => params.append('roots[]', r));      // <-- ADDED
       dirs.forEach(d => params.append('dirs[]', d));
       exts.forEach(e => params.append('exts[]', e));
       regions.forEach(r => params.append('regions[]', r));
@@ -545,21 +628,25 @@
         return;
       }
 
-      const pages = Math.ceil((json.total || json.results.length) / (json.perPage || json.results.length)) || 1;
+      const pages = Math.ceil((json.total || json.results.length) / (json.perPage || json.pageSize || json.results.length)) || 1;
       renderPagination(pages, json.page || 1);
 
+      const q = (document.getElementById('mongo-search-input')?.value || '').trim();
+
       results.innerHTML = json.results.map(doc => {
-        const snippet = highlight(linesWithHighlight(doc.raw, currentTerm), currentTerm);
-        const full = highlight(doc.raw || '', currentTerm);
-        const filepath = escapeHtml(doc.filepath || '(unknown file)');
+        const raw = doc.raw || doc.full || doc.snippet || '';
+        const snippet = highlight(linesWithHighlight(raw, q), q);
+        const full = highlight(raw || '', q);
+        const filepath = escapeHtml(doc.filepath || doc.path || '(unknown file)');
+        const hasFull = !!raw;
         return `
           <div class="mongo-result" data-file="${filepath}">
             <div class="mongo-path">
               <span class="path-text">${filepath}</span>
-              <button class="expand-btn">Expand</button>
+              ${hasFull ? '<button class="expand-btn">Expand</button>' : ''}
             </div>
             <pre class="mongo-snippet">${snippet}</pre>
-            <pre class="full-content" style="display:none;">${full}</pre>
+            ${hasFull ? `<pre class="full-content" style="display:none;">${full}</pre>` : ''}
           </div>
         `;
       }).join('');
@@ -594,4 +681,3 @@
     if (btn) btn.addEventListener('click', () => window.toggleMongoPopup());
   });
 })();
-
