@@ -141,8 +141,14 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
-
-<div class="mod-wrap" id="modLayout" data-root="<?= esc($root) ?>" data-slug="<?= esc($slug) ?>" data-basekey="<?= esc($baseKey ?? '') ?>" data-selectedfile="<?= esc($selectedFile ?? '') ?>">
+<div
+  class="mod-wrap"
+  id="modLayout"
+  data-root="<?= esc($root) ?>"
+  data-slug="<?= esc($slug) ?>"
+  data-basekey="<?= esc($root . '/' . $slug) ?>"
+  data-selectedfile="<?= esc($selectedFile ?? '') ?>"
+>
   <div class="columns">
     <!-- LEFT: MyMods card + Files tree panel -->
     <div id="colLeft">
@@ -232,6 +238,25 @@ const tree    = document.getElementById('tree');
     return `/mods/${encodeURIComponent(root)}/${encodeURIComponent(slug)}/${segs.join('/')}` + `?format=json`;
   }
 
+  function setUrlSelection(rel) {
+    try {
+      const url = new URL(window.location.href);
+      if (rel) {
+        url.searchParams.set('sel', rel);
+      } else {
+        url.searchParams.delete('sel');
+      }
+      history.replaceState(null, '', url);
+    } catch (_) {}
+  }
+
+  function getUrlSelection() {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get('sel') || '';
+    } catch (_) { return ''; }
+  }
+
   async function openRel(rel) {
     try {
       view.innerHTML = `<div class="muted">Loading…</div>`;
@@ -243,6 +268,7 @@ const tree    = document.getElementById('tree');
       meta.innerHTML = badgeBar(data);
       // persist again on successful load
       persistSelection(rel); saveLocal(rel);
+      setUrlSelection(rel);      
 
       const kind   = data.kind || 'unknown';
       const ext    = (data.ext || '').toLowerCase();
@@ -296,6 +322,11 @@ const tree    = document.getElementById('tree');
     if (!k) return '';
     try { return localStorage.getItem(k) || ''; } catch (_) { return ''; }
   }
+  function clearLocal() {
+    const k = lsKey();
+    if (!k) return;
+    try { localStorage.removeItem(k); } catch (_) {}
+  }
 function persistSelection(rel) {
     const baseKey = document.getElementById('modLayout')?.dataset?.basekey || '';
     if (!baseKey || !rel) return;
@@ -324,17 +355,49 @@ tree.addEventListener('click', (e) => {
     persistSelection(rel); saveLocal(rel);
     openRel(rel);
   });
-// Auto-open remembered selection on load (server value or localStorage fallback)
+
+  // Auto-open remembered selection on load (server value, then ?sel=, then localStorage)
   (function(){
-    let remembered = document.getElementById('modLayout')?.dataset?.selectedfile || '';
-    if (!remembered) remembered = loadLocal();
-    if (remembered) {
-      const node = document.querySelector('.node[data-rel="' + remembered.replace(/"/g,'\\"') + '"]');
-      if (node) { node.classList.add('active'); try { node.scrollIntoView({block:'nearest', inline:'nearest'}); } catch(_) {} }
-      if (typeof openRel === 'function') openRel(remembered);
+    const layout = document.getElementById('modLayout');
+    const serverSelected = layout?.dataset?.selectedfile || '';
+
+    // Build a set of available file rel paths under THIS root
+    const available = new Set(
+      Array.from(document.querySelectorAll('.node.file[data-rel]'))
+        .map(n => n.getAttribute('data-rel') || '')
+    );
+
+    let rel = serverSelected;
+
+    if (!rel) {
+      // 1) Prefer URL deep-link first
+      const urlRel = getUrlSelection();
+      if (urlRel && available.has(urlRel)) {
+        rel = urlRel;
+      } else {
+        // If URL has a selection that doesn't exist in this root, clean it up
+        if (urlRel && !available.has(urlRel)) setUrlSelection('');
+
+        // 2) Fall back to LocalStorage
+        const saved = loadLocal();
+        if (saved && available.has(saved)) {
+          rel = saved;
+        } else if (saved && !available.has(saved)) {
+          // Clear stale cross-root value
+          clearLocal();
+        }
+      }
+    }
+
+    if (rel) {
+      const node = document.querySelector('.node[data-rel="' + rel.replace(/"/g,'\\"') + '"]');
+      if (node) {
+        node.classList.add('active');
+        try { node.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+      }
+      if (typeof openRel === 'function') openRel(rel);
     }
   })();
-
 
   // Highlight helper for Fetch UUID widgets
   function clearHighlights() {
