@@ -21,6 +21,7 @@
 namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
+use App\Services\PathResolver;
 use App\Helpers\XmlHelper;
 use App\Helpers\TextParserHelper;
 use App\Libraries\LsxHelper;
@@ -28,12 +29,16 @@ use App\Libraries\LocalizationScanner;
 
 class Mods extends BaseController
 {
+    /** @var PathResolver */
+    protected $pathResolver;
+
     /** @var \App\Services\SelectionService */
     protected $selection;
 
     public function __construct()
     {
         $this->selection = service('selection');
+        $this->pathResolver = service('pathResolver');
     }
 
     /* ======================== ROUTES ======================== */
@@ -71,8 +76,8 @@ class Mods extends BaseController
     // GET /mods/{Root} → (MyMods uses browse layout)
     public function listRoot(string $root): ResponseInterface
     {
-        $rootKey = $this->normalizeRoot($root);
-        $base    = $this->rootPath($rootKey);
+        $rootKey = $this->pathResolver->canonicalKey($root);
+        $base = $this->pathResolver->root($root);
         if (!$base || !is_dir($base)) {
             return $this->notFound("Root not configured: {$rootKey}");
         }
@@ -124,7 +129,7 @@ class Mods extends BaseController
     private function getMyModsList(): array
     {
         try {
-            $base = service('pathResolver')->myMods();
+            $base = $this->pathResolver->root('MyMods');
         } catch (\Throwable $e) {
             return [];
         }
@@ -143,7 +148,7 @@ class Mods extends BaseController
             if ($name === '.' || $name === '..' || $name[0] === '.') {
                 continue; // skip dot/hidden
             }
-            $full = $base . DIRECTORY_SEPARATOR . $name;
+            $full = $this->pathResolver->join('MyMods', $name, null);
             if (is_dir($full)) {
                 $dirs[] = $name; // top-level dir only
             }
@@ -161,7 +166,7 @@ class Mods extends BaseController
         $out = [];
         foreach (scandir($base) ?: [] as $name) {
             if ($name === '.' || $name === '..' || $name[0] === '.') continue;
-            if (is_dir($base . DIRECTORY_SEPARATOR . $name)) {
+            if (is_dir($this->pathResolver->join($rootKey, $name, null))) {
                 $out[] = $name;
             }
         }
@@ -172,8 +177,8 @@ class Mods extends BaseController
     // GET /mods/{Root}/{slug} → full recursive tree (left column)
     public function mod(string $root, string $slug): ResponseInterface
     {
-        $rootKey = $this->normalizeRoot($root);
-        $abs     = service('pathResolver')->join($rootKey, $slug);
+        $rootKey = $this->pathResolver->canonicalKey($root);
+        $abs     = service('pathResolver')->join($rootKey, $slug, null);
         if (!is_dir($abs)) return $this->notFound('Mod not found');
 
         $tree = service('directoryScanner')->tree($abs, '');
@@ -206,9 +211,9 @@ class Mods extends BaseController
     // GET /mods/{Root}/{slug}/{path...} → directory (tree) or file (content)
     public function view(string $root, string $slug, string $relPath): ResponseInterface
     {
-        $rootKey = $this->normalizeRoot($root);
+        $rootKey = $this->pathResolver->canonicalKey($root);
         $relPath = ltrim($relPath, '/');
-        $abs     = service('pathResolver')->join($rootKey, $slug . ($relPath ? '/' . $relPath : ''));
+        $abs = $this->pathResolver->join($rootKey, $slug, $relPath);
 
         if (is_dir($abs)) {
             $tree = service('directoryScanner')->tree($abs, $relPath);
@@ -264,7 +269,7 @@ class Mods extends BaseController
 
             case 'lsx': {
                 // Detect region + group and parse with handle-map enrichment
-                $modAbs    = service('pathResolver')->join($rootKey, $slug);
+                $modAbs    = service('pathResolver')->join($rootKey, $slug, null);
                 $scanner   = new LocalizationScanner(true, false);
                 $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
                 $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
@@ -349,9 +354,9 @@ class Mods extends BaseController
     public function save(string $root, string $slug, string $relPath): ResponseInterface
     {
         try {
-            $rootKey = $this->normalizeRoot($root);
+            $rootKey = $this->pathResolver->canonicalKey($root);
             $relPath = ltrim($relPath, '/');
-            $abs     = service('pathResolver')->join($rootKey, $slug . ($relPath ? '/' . $relPath : ''));
+            $abs     = service('pathResolver')->join($rootKey, $slug, $relPath ?: null);
 
             $raw      = $this->request->getPost('data');       // optional raw text
             $dataJson = $this->request->getPost('data_json');  // optional JSON string
@@ -397,27 +402,6 @@ class Mods extends BaseController
         return str_contains($accept, 'application/json');
     }
 
-    private function rootPath(string $rootKey): ?string
-    {
-        $paths = service('pathResolver');
-        return match ($rootKey) {
-            'MyMods'       => $paths->myMods(),
-            'UnpackedMods' => $paths->unpackedMods(),
-            'GameData'     => $paths->gameData(),
-            default        => null,
-        };
-    }
-
-    private function normalizeRoot(string $root): string
-    {
-        return match (strtolower($root)) {
-            'mymods','mods'           => 'MyMods',
-            'unpackedmods','allmods'  => 'UnpackedMods',
-            'gamedata'                => 'GameData',
-            default                   => $root,
-        };
-    }
-
     private function notFound(string $msg): ResponseInterface
     {
         if ($this->wantsJson()) {
@@ -434,7 +418,7 @@ class Mods extends BaseController
         $n = 0;
         foreach (scandir($base) ?: [] as $name) {
             if ($name === '.' || $name === '..' || $name[0] === '.') continue;
-            if (is_dir($base . DIRECTORY_SEPARATOR . $name)) $n++;
+            if (is_dir($this->pathResolver->join($rootKey, $name, null))) $n++;
         }
         return $n;
     }

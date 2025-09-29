@@ -20,11 +20,16 @@ class PathResolver
     {
         $cfg ??= config(BG3Paths::class);
 
-        $this->gameData     = $this->normalizeRoot($this->readEnvOrDefault($cfg->envGameData, $cfg->defaultGameData));
-        $this->myMods       = $this->normalizeRoot($this->readEnvOrDefault($cfg->envMyMods, $cfg->defaultMyMods));
-        $this->unpackedMods = $this->normalizeRoot($this->readEnvOrDefault($cfg->envUnpackedMods, $cfg->defaultUnpackedMods));
+        // normalizeRoot() is whatever you already use to canonicalize/trim
+        $this->gameData     = $this->normalizeRoot($cfg->GameData ?? '');
+        $this->myMods       = $this->normalizeRoot($cfg->MyMods ?? '');
+        $this->unpackedMods = $this->normalizeRoot($cfg->UnpackedMods ?? '');
 
-        $this->roots = array_values(array_filter([$this->gameData, $this->myMods, $this->unpackedMods]));
+        $this->roots = [
+            'GameData'     => $this->gameData,
+            'MyMods'       => $this->myMods,
+            'UnpackedMods' => $this->unpackedMods,
+        ];
     }
 
     public function gameData(): ?string     { return $this->gameData     ?: null; }
@@ -32,11 +37,19 @@ class PathResolver
     public function unpackedMods(): ?string { return $this->unpackedMods ?: null; }
 
     /**
-     * Join a relative path to one of the known roots and return a sanitized, absolute path.
-     * @param 'GameData'|'MyMods'|'UnpackedMods' $rootKey
-     * @throws \RuntimeException
+     * Join {rootKey}/{slug}/{relPath?} into a sanitized absolute path under the configured root.
+     * - rootKey: 'GameData' | 'MyMods' | 'UnpackedMods'
+     * - slug: a single directory segment (no slashes)
+     * - relPath: optional relative path (may contain slashes)
+     *
+     * Guarantees:
+     *  - Canonicalize via realpath on existing portions
+     *  - Reject traversal and escapes outside the root
+     *  - Allow non-existent leaf (useful for writes): parent must exist
+     *
+     * @throws \RuntimeException on invalid input or escape
      */
-    public function join(string $rootKey, string $relative): string
+    public function join(string $rootKey, string $slug, ?string $relPath = null): string
     {
         $root = match ($rootKey) {
             'GameData'     => $this->gameData,
@@ -47,10 +60,45 @@ class PathResolver
         if (!$root) {
             throw new \RuntimeException("Root '{$rootKey}' is not configured.");
         }
-        $relative = ltrim($relative, "\\/"); // enforce “relative”
-        $joined   = preg_replace('#[\\/]+#', DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR . $relative);
-        return $this->assertContained($joined, $root);
+
+        // slug must be a single safe segment
+        $slug = $this->assertSafeSegment($slug, 'slug');
+
+        // Normalize relPath (may be null/empty or contain slashes)
+        $relPath = $relPath !== null ? ltrim($relPath, "\\/") : '';
+        if ($relPath !== '') {
+            $this->assertSafeRelative($relPath);
+        }
+
+        // Build candidate path
+        $joined = $root . DIRECTORY_SEPARATOR . $slug;
+        if ($relPath !== '') {
+            $joined .= DIRECTORY_SEPARATOR . $relPath;
+        }
+
+        // Canonicalize: realpath on existing parent; allow non-existent leaf
+        $parent = is_dir($joined) ? $joined : dirname($joined);
+        $parentReal = realpath($parent);
+        if ($parentReal === false) {
+            throw new \RuntimeException("Parent path does not exist or is not accessible: {$parent}");
+        }
+
+        $baseReal = realpath($root);
+        if ($baseReal === false) {
+            throw new \RuntimeException("Configured root not accessible: {$rootKey}");
+        }
+
+        // Reconstruct absolute target under canonical parent
+        if (is_dir($joined)) {
+            $abs = $parentReal; // whole target exists and is dir
+        } else {
+            $abs = $parentReal . DIRECTORY_SEPARATOR . basename($joined);
+        }
+
+        // Final containment check (prevents escapes/symlink hops)
+        return $this->assertContained($abs, $baseReal);
     }
+
 
     /**
      * Verify a path is inside any allowed root. Returns absolute path or throws.
@@ -117,5 +165,51 @@ class PathResolver
         }
         return $abs;
     }
+
+    public function canonicalKey(string $root): string
+    {
+        // Exact match
+        if (isset($this->roots[$root])) {
+            return $root;
+        }
+        // Case-insensitive match
+        foreach ($this->roots as $key => $_) {
+            if (strcasecmp($key, $root) === 0) {
+                return $key;
+            }
+        }
+        throw new \RuntimeException("Unknown root '{$root}'");
+    }
+
+    public function root(string $rootKey): string
+    {
+        if (!isset($this->roots[$rootKey]) || $this->roots[$rootKey] === '') {
+            throw new \RuntimeException("Unknown root '{$rootKey}'");
+        }
+        return $this->roots[$rootKey];
+    }
+
+    private function assertSafeSegment(string $seg, string $label): string
+    {
+        if ($seg === '' || $seg === '.' || $seg === '..') {
+            throw new \RuntimeException("Invalid {$label}");
+        }
+        if (strpbrk($seg, "/\\") !== false) {
+            throw new \RuntimeException("Invalid {$label} (must be a single path segment)");
+        }
+        return $seg;
+    }
+
+    private function assertSafeRelative(string $rel): void
+    {
+        // Forbid .. traversal and Windows drive prefixes
+        if (preg_match('#(^|[\\/])\.\.([\\/]|$)#', $rel)) {
+            throw new \RuntimeException('Relative path traversal is not allowed');
+        }
+        if (preg_match('#^[A-Za-z]:[\\/]#', $rel)) {
+            throw new \RuntimeException('Absolute drive paths are not allowed');
+        }
+    }
+
 }
 ?>
