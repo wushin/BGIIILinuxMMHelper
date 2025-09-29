@@ -5,6 +5,8 @@ namespace Config;
 use CodeIgniter\Config\BaseService;
 use App\Services\PathResolver;
 use App\Services\ContentService;
+use App\Config\Selection as SelectionConfig;
+use App\Services\SelectionService;
 use Config\BG3Paths;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\MarkdownConverter;
@@ -129,6 +131,18 @@ class Services extends BaseService
         $mcfg  = config(\Config\Mongo::class);
         $bg3   = config(\Config\BG3Paths::class);
         return new \App\Services\MongoIndexer($mongo, $bg3, $mcfg);
+    }
+
+    public static function selection(bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('selection');
+        }
+
+        $config  = config(SelectionConfig::class);
+        $session = service('session');
+
+        return new SelectionService($config, $session);
     }
 
 }

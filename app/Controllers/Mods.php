@@ -28,32 +28,12 @@ use App\Libraries\LocalizationScanner;
 
 class Mods extends BaseController
 {
-    /* ====== Selection persistence helpers ====== */
-    private function selectionSessionKey(string $baseKey): string
+    /** @var \App\Services\SelectionService */
+    protected $selection;
+
+    public function __construct()
     {
-        return 'last_selected_file:' . $baseKey;
-    }
-    private function setLastSelected(string $baseKey, string $relPath): void
-    {
-        $session = session();
-        $session->set($this->selectionSessionKey($baseKey), $relPath);
-    }
-    private function getLastSelected(string $baseKey): ?string
-    {
-        $session = session();
-        $val = $session->get($this->selectionSessionKey($baseKey));
-        return is_string($val) ? $val : null;
-    }
-    public function saveSelection(): \CodeIgniter\HTTP\ResponseInterface
-    {
-        $req = $this->request;
-        $baseKey = trim((string)$req->getPost('base'));
-        $rel     = trim((string)$req->getPost('path'));
-        if ($baseKey === '' || $rel === '') {
-            return $this->response->setStatusCode(400)->setJSON(['ok' => false, 'err' => 'missing base/path']);
-        }
-        $this->setLastSelected($baseKey, $rel);
-        return $this->response->setJSON(['ok' => true]);
+        $this->selection = service('selection');
     }
 
     /* ======================== ROUTES ======================== */
@@ -120,7 +100,7 @@ class Mods extends BaseController
                 'tree'         => [],     // empty until a mod is chosen
                 'myMods'       => $myMods, // top card content
                 'baseKey'      => 'mods/' . $rootKey,
-                'selectedFile' => $this->getLastSelected('mods/' . $rootKey),
+                'selectedFile' => null,
             ]));
         }
 
@@ -198,26 +178,29 @@ class Mods extends BaseController
 
         $tree = service('directoryScanner')->tree($abs, '');
 
+        $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
+
         if ($this->wantsJson()) {
             return $this->response->setJSON([
-                'ok'   => true,
-                'root' => $rootKey,
-                'slug' => $slug,
-                'path' => '',
-                'tree' => $tree,
-            ]);
+                'ok'        => true,
+                'root'      => $rootKey,
+                'slug'      => $slug,
+                'path'      => '',
+                'tree'      => $tree,
+                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+            ]);        
         }
 
         return $this->response->setBody(view('mods/browse', [
-                'pageTitle'    => $slug,
-                'root'         => $rootKey,
-                'slug'         => $slug,
-                'path'         => '',
-                'tree'         => $tree,
-                'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
-                'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
-                'selectedFile' => $this->getLastSelected('mods/' . $rootKey . '/' . $slug),
-            ]));
+            'pageTitle'    => $slug,
+            'root'         => $rootKey,
+            'slug'         => $slug,
+            'path'         => '',
+            'tree'         => $tree,
+            'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
+            'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
+            'selectedFile' => $sel['relPath'] ?? null,
+        ]));
     }
 
     // GET /mods/{Root}/{slug}/{path...} → directory (tree) or file (content)
@@ -230,13 +213,16 @@ class Mods extends BaseController
         if (is_dir($abs)) {
             $tree = service('directoryScanner')->tree($abs, $relPath);
 
+            $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
+
             if ($this->wantsJson()) {
                 return $this->response->setJSON([
-                    'ok'   => true,
-                    'root' => $rootKey,
-                    'slug' => $slug,
-                    'path' => $relPath,
-                    'tree' => $tree,
+                    'ok'        => true,
+                    'root'      => $rootKey,
+                    'slug'      => $slug,
+                    'path'      => $relPath,
+                    'tree'      => $tree,
+                    'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
                 ]);
             }
 
@@ -248,7 +234,7 @@ class Mods extends BaseController
                 'tree'         => $tree,
                 'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
                 'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
-                'selectedFile' => $this->getLastSelected('mods/' . $rootKey . '/' . $slug),
+                'selectedFile' => $sel['relPath'] ?? null,
             ]));
         }
 
@@ -314,6 +300,14 @@ class Mods extends BaseController
         if ($this->wantsJson()) {
             $rawOut = in_array($kind, ['txt','khn','xml','lsx','unknown'], true) ? $bytes : null;
 
+            $this->selection->remember([
+                'root'    => $rootKey,
+                'slug'    => $slug,
+                'relPath' => $relPath,
+                'ext'     => $ext,
+                'kind'    => $kind,
+            ]);
+
             return $this->response->setJSON([
                 'ok'          => true,
                 'root'        => $rootKey,
@@ -325,8 +319,17 @@ class Mods extends BaseController
                 'raw'         => $rawOut,
                 'region'      => $meta['region']      ?? null,
                 'regionGroup' => $meta['regionGroup'] ?? null,
+                'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
             ]);
         }
+
+        $this->selection->remember([
+            'root'    => $rootKey,
+            'slug'    => $slug,
+            'relPath' => $relPath,
+            'ext'     => $ext,
+            'kind'    => $kind,
+        ]);
 
         // HTML view fallback (inline rendering is normally in browse.php)
         return $this->response->setBody(view('mods/file', [
@@ -338,6 +341,7 @@ class Mods extends BaseController
             'kind'      => $kind,
             'result'    => $payload,
             'raw'       => $bytes,
+            'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
         ]));
     }
 
@@ -358,14 +362,27 @@ class Mods extends BaseController
 
             service('contentService')->write($abs, $bytes, true);
 
-            return $this->response->setJSON([
-                'ok'    => true,
-                'path'  => $abs,
-                'bytes' => strlen($bytes),
-                'ext'   => $ext,
-                'kind'  => $kind,
-                'from'  => is_string($dataJson) && $dataJson !== '' ? 'json' : 'raw',
+            $this->selection->remember([
+                'root'    => $rootKey,
+                'slug'    => $slug,
+                'relPath' => $relPath,
+                'ext'     => $ext,
+                'kind'    => $kind,
             ]);
+
+            return $this->response->setJSON([
+                'ok'        => true,
+                'root'      => $rootKey,
+                'slug'      => $slug,
+                'path'      => $abs,
+                'rel'       => $relPath,
+                'bytes'     => strlen($bytes),
+                'ext'       => $ext,
+                'kind'      => $kind,
+                'from'      => is_string($dataJson) && $dataJson !== '' ? 'json' : 'raw',
+                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+            ]);
+
         } catch (\Throwable $e) {
             return $this->response->setStatusCode(500)->setJSON(['ok' => false, 'error' => $e->getMessage()]);
         }
