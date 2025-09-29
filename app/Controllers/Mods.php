@@ -57,9 +57,9 @@ class Mods extends BaseController
         $summary = [];
         foreach ($rootsAbs as $key => $abs) {
             $summary[$key] = [
-                'configured' => is_string($abs) && $abs !== '' && is_dir($abs),
+                'configured' => service('directoryScanner')->isRootConfigured($key),
                 'path'       => $abs ?: null,
-                'count'      => $this->countDirs($abs),
+                'count'      => service('directoryScanner')->countTopLevel($key),
             ];
         }
 
@@ -78,7 +78,7 @@ class Mods extends BaseController
     {
         $rootKey = $this->pathResolver->canonicalKey($root);
         $base = $this->pathResolver->root($root);
-        if (!$base || !is_dir($base)) {
+        if (!service('directoryScanner')->rootUsable($rootKey)) { 
             return $this->notFound("Root not configured: {$rootKey}");
         }
 
@@ -110,7 +110,7 @@ class Mods extends BaseController
         }
 
         // Default behavior for other roots (GameData/UnpackedMods): directory list
-        $mods = $this->listDirs($base);
+        $mods = service('directoryScanner')->listTopLevel($rootKey);
 
         if ($this->wantsJson()) {
             return $this->response->setJSON(['ok' => true, 'root' => $rootKey, 'mods' => $mods]);
@@ -128,50 +128,9 @@ class Mods extends BaseController
      */
     private function getMyModsList(): array
     {
-        try {
-            $base = $this->pathResolver->root('MyMods');
-        } catch (\Throwable $e) {
-            return [];
-        }
-
-        if (!$base || !is_dir($base)) {
-            return [];
-        }
-
-        $dirs = [];
-        $dh = @opendir($base);
-        if ($dh === false) {
-            return [];
-        }
-
-        while (($name = readdir($dh)) !== false) {
-            if ($name === '.' || $name === '..' || $name[0] === '.') {
-                continue; // skip dot/hidden
-            }
-            $full = $this->pathResolver->join('MyMods', $name, null);
-            if (is_dir($full)) {
-                $dirs[] = $name; // top-level dir only
-            }
-        }
-        closedir($dh);
-
+        $dirs = service('directoryScanner')->listTopLevel('MyMods');
         sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
         return $dirs;
-    }
-
-    // Returns the names of immediate subdirectories under $base (dirs only, A→Z).
-    private function listDirs(?string $base): array
-    {
-        if (!$base || !is_dir($base)) return [];
-        $out = [];
-        foreach (scandir($base) ?: [] as $name) {
-            if ($name === '.' || $name === '..' || $name[0] === '.') continue;
-            if (is_dir($this->pathResolver->join($rootKey, $name, null))) {
-                $out[] = $name;
-            }
-        }
-        usort($out, static fn($a, $b) => strcasecmp($a, $b));
-        return $out;
     }
 
     // GET /mods/{Root}/{slug} → full recursive tree (left column)
@@ -179,9 +138,11 @@ class Mods extends BaseController
     {
         $rootKey = $this->pathResolver->canonicalKey($root);
         $abs     = service('pathResolver')->join($rootKey, $slug, null);
-        if (!is_dir($abs)) return $this->notFound('Mod not found');
+        if (!service('directoryScanner')->modExists($rootKey, $slug)) {
+            return $this->notFound('Mod not found');
+        }        
 
-        $tree = service('directoryScanner')->tree($abs, '');
+        $tree = service('directoryScanner')->tree($rootKey, $slug);
 
         $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
 
@@ -215,8 +176,8 @@ class Mods extends BaseController
         $relPath = ltrim($relPath, '/');
         $abs = $this->pathResolver->join($rootKey, $slug, $relPath);
 
-        if (is_dir($abs)) {
-            $tree = service('directoryScanner')->tree($abs, $relPath);
+        if (service('directoryScanner')->isDirectory($rootKey, $slug, $relPath)) {
+            $tree = service('directoryScanner')->treeFromAbsolute($abs, $relPath);
 
             $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
 
@@ -410,17 +371,6 @@ class Mods extends BaseController
         return $this->response->setStatusCode(404)->setBody(
             view('mods/error', ['pageTitle' => 'Not Found', 'message' => $msg])
         );
-    }
-
-    private function countDirs(?string $base): int
-    {
-        if (!$base || !is_dir($base)) return 0;
-        $n = 0;
-        foreach (scandir($base) ?: [] as $name) {
-            if ($name === '.' || $name === '..' || $name[0] === '.') continue;
-            if (is_dir($this->pathResolver->join($rootKey, $name, null))) $n++;
-        }
-        return $n;
     }
 
     private function tryTxtToJson(string $bytes): array

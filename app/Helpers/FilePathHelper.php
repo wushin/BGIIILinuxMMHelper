@@ -34,7 +34,7 @@ class FilePathHelper
 
     /**
      * Absolute path to a mod folder (kept for callers).
-     * Equivalent to: join($root, $slug)
+     * Equivalent to: PathResolver->join($root, $slug, null)
      */
     public static function getAbsPath(string $root, string $slug): string
     {
@@ -43,12 +43,12 @@ class FilePathHelper
 
     /**
      * Absolute file path inside a mod (kept for callers).
-     * Equivalent to: join($root, $slug . '/' . $rel)
+     * Equivalent to: PathResolver->join($root, $slug, $rel)
      */
     public static function getAbsFileName(string $root, string $slug, string $rel): string
     {
         $rel = ltrim($rel, '/');
-        return self::join($root, rtrim($slug, '/').'/'.$rel);
+        return service('pathResolver')->join($root, $slug, $rel);
     }
 
     /**

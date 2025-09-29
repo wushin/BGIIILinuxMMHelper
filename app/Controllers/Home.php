@@ -6,7 +6,12 @@ class Home extends BaseController
     public function index()
     {
         $readmePath = ROOTPATH . 'README.md';
-        $md = is_file($readmePath) ? file_get_contents($readmePath) : '';
+        $md = '';
+        try {
+            $md = @file_get_contents($readmePath) ?: '';
+        } catch (\Throwable $e) {
+            $md = '';
+        }
 
         $md = preg_replace("/\\\\\r?\n/", "  \n", $md);
 

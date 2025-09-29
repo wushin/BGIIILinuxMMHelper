@@ -144,9 +144,18 @@ class Display extends BaseController
         if (str_contains($msg, 'not configured') || str_contains($msg, 'escape')) {
             return 400;
         }
-        if (!empty($path) && !file_exists($path)) {
+        // Prefer exception type/message over hitting the filesystem here
+        $code = (int) ($e->getCode() ?? 0);
+        if ($code === 404) {
             return 404;
         }
+        if (!empty($path)) {
+            $m = strtolower($msg);
+            if (str_contains($m, 'not found') || str_contains($m, 'no such file') || str_contains($m, 'does not exist')) {
+                return 404;
+            }
+        }
+        
         return 500;
     }
 }
