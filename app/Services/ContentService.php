@@ -5,6 +5,13 @@ namespace App\Services;
 use App\Services\ContentService;
 use App\Services\PathResolver;
 use Config\BG3Paths;
+use App\Services\MimeGuesser;
+use App\Services\ImageTransformer;
+use App\Libraries\LocalizationScanner;
+use App\Libraries\LsxHelper;
+use App\Helpers\TextParserHelper;
+use App\Helpers\XmlHelper;
+
 
 /**
  * ContentService centralizes safe file reading/writing and basic directory listing.
@@ -119,5 +126,187 @@ class ContentService
         $s = str_replace("\r", "\n", $s);
         return $s;
     }
+
+    public function open(string $abs): array
+    {
+        // 1) Read bytes (reuse your existing low-level read)
+        $bytes = $this->read($abs); // throws on error
+
+        // 2) Identify ext/kind
+        $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+        /** @var MimeGuesser $kinds */
+        $kinds = service('mimeGuesser');
+        $kind  = $kinds->kindFromExt($ext);
+
+        $payload = null;
+        $meta    = [];
+
+        switch ($kind) {
+            case 'txt':
+            case 'khn':
+                try {
+                    $json = TextParserHelper::txtToJson($bytes, true);
+                    $arr  = json_decode($json, true);
+                    $payload = is_array($arr) ? $arr : ['raw' => $bytes];
+                } catch (\Throwable $__) {
+                    $payload = ['raw' => $bytes];
+                }
+                break;
+
+            case 'xml':
+                try {
+                    $json = XmlHelper::createJson($bytes, true);
+                    $arr  = json_decode($json, true);
+                    $payload = is_array($arr) ? $arr : ['raw' => $bytes];
+                } catch (\Throwable $__) {
+                    $payload = ['raw' => $bytes];
+                }
+                break;
+
+            case 'lsx': {
+                // Infer mod root to locate localization XMLs for handle-map enrichment
+                [$rootKey, $slug] = $this->inferRootAndSlugFromAbsolute($abs);
+
+                $scanner   = new LocalizationScanner(true, false);
+                $modAbs    = $rootKey && $slug ? service('pathResolver')->join($rootKey, $slug, null) : null;
+                $langXmls  = $modAbs ? $scanner->findLocalizationXmlsForMod($modAbs) : [];
+                $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+
+                $region      = LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
+                $regionGroup = LsxHelper::regionGroupFromId($region);
+
+                $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
+                $payload  = json_decode($jsonTree, true);
+
+                $meta['region']      = $region;
+                $meta['regionGroup'] = $regionGroup;
+                break;
+            }
+
+            case 'image':
+                if ($ext === 'dds') {
+                    /** @var ImageTransformer $img */
+                    $img = service('imageTransformer');
+                    $uri = $img->ddsToPngDataUri($abs);
+                    $payload = ['dataUri' => $uri, 'converted' => (bool) $uri, 'from' => 'dds'];
+                } else {
+                    $payload = [
+                        'dataUri'   => 'data:' . $kinds->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
+                        'converted' => false,
+                    ];
+                }
+                break;
+
+            default:
+                $payload = ['raw' => $bytes];
+                break;
+        }
+
+        return [
+            'kind'    => $kind,
+            'ext'     => $ext,
+            'payload' => $payload,
+            'meta'    => $meta,
+        ];
+    }
+
+    /**
+     * Infer (rootKey, slug) from an absolute path by checking configured roots.
+     * Returns [null, null] if not under a known root.
+     */
+    private function inferRootAndSlugFromAbsolute(string $abs): array
+    {
+        /** @var PathResolver $paths */
+        $paths = service('pathResolver');
+
+        foreach (['GameData', 'MyMods', 'UnpackedMods'] as $rk) {
+            try {
+                $root = rtrim($paths->root($rk), DIRECTORY_SEPARATOR);
+            } catch (\Throwable $__) {
+                continue;
+            }
+            if ($root !== '' && str_starts_with($abs, $root . DIRECTORY_SEPARATOR)) {
+                $tail  = substr($abs, strlen($root) + 1);
+                $parts = explode(DIRECTORY_SEPARATOR, $tail, 2);
+                $slug  = $parts[0] ?? '';
+                if ($slug !== '') {
+                    return [$rk, $slug];
+                }
+            }
+        }
+        return [null, null];
+    }
+
+    public function save(string $abs, ?string $raw, ?string $json): array
+    {
+        // Normalize inputs
+        $raw  = is_string($raw)  ? $raw  : null;
+        $json = is_string($json) ? $json : null;
+
+        // Figure out ext/kind
+        $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+        $kinds = service('mimeGuesser');
+        $kind  = $kinds->kindFromExt($ext);
+
+        // Decide what bytes to write
+        $bytesToWrite = null;
+        $warnings     = [];
+
+        // Treat these as plain-text files
+        $textLikeExts  = ['txt','khn','anc','ann','cln','clc'];
+        $textLikeKinds = ['txt','khn','unknown'];
+        $isTextLike    = in_array($ext, $textLikeExts, true) || in_array($kind, $textLikeKinds, true);
+
+        if ($isTextLike) {
+            if ($raw !== null && $raw !== '') {
+                $bytesToWrite = $raw;
+            } elseif ($json !== null && $json !== '') {
+                // If UI sent a string that is the intended file contents, accept it.
+                // If UI sent structured JSON, writing it verbatim is probably not desired.
+                // Keep it simple: write the string as-is (caller controls the UI).
+                $bytesToWrite = $json;
+            } else {
+                throw new \RuntimeException('Nothing to save: provide raw or json for text-like kinds.');
+            }
+        } elseif (in_array($kind, ['xml','lsx'], true)) {
+            if ($raw !== null && $raw !== '') {
+                // For now, accept raw XML/LSX only. JSON→XML conversion will be added later.
+                $bytesToWrite = $raw;
+            } elseif ($json !== null && $json !== '') {
+                // Future work: convert structured JSON back to XML/LSX via dedicated parser.
+                throw new \RuntimeException('Saving XML/LSX from JSON is not implemented yet.');
+            } else {
+                throw new \RuntimeException('Nothing to save for XML/LSX.');
+            }
+        } else {
+            // Binary/other kinds: only accept raw bytes
+            if ($raw !== null && $raw !== '') {
+                $bytesToWrite = $raw;
+            } else {
+                throw new \RuntimeException('This file type requires raw bytes to save.');
+            }
+        }
+
+        // Ensure parent exists
+        $dir = dirname($abs);
+        if (!is_dir($dir)) {
+            if (!@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                throw new \RuntimeException("Failed to create directory: {$dir}");
+            }
+        }
+
+        // Write atomically-ish
+        $bytesWritten = $this->write($abs, $bytesToWrite, true);
+
+        return [
+            'ok'            => true,
+            'path'          => $abs,
+            'ext'           => $ext,
+            'kind'          => $kind,
+            'bytesWritten'  => $bytesWritten,
+            'warnings'      => $warnings,
+        ];
+    }
+
 }
 ?>

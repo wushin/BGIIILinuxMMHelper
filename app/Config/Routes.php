@@ -23,6 +23,8 @@ $routes->get('mods/(:segment)/(:segment)/', 'Mods::mod/$1/$2');     // trailing 
 
 $routes->get('mods/(:segment)/(:segment)/(:any)',  'Mods::view/$1/$2/$3'); // file paths
 
+$routes->post('mods/selection', 'Mods::saveSelection');
+
 $routes->get('display/(:segment)',          'Display::view/$1');        // root only -> path empty
 $routes->get('display/(:segment)/(.+)',     'Display::view/$1/$2');     // view file
 $routes->post('display/(:segment)/(.+)',    'Display::save/$1/$2');     // save file
@@ -46,4 +48,3 @@ $routes->post('save', [Mods::class, 'save']);
 $routes->get('search/mongo', 'SearchMongo::index');
 $routes->get('search/mongo-filters', 'SearchMongo::filters');
 
-$routes->post('mods/selection', 'Mods::saveSelection');

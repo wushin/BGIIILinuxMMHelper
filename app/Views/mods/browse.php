@@ -218,7 +218,7 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   const slug    = rootEl?.dataset?.slug || '';
 
   
-const tree    = document.getElementById('tree');
+  const tree    = document.getElementById('tree');
   const view    = document.getElementById('viewer');
   const meta    = document.getElementById('meta');
   const colLeft = document.getElementById('colLeft');
@@ -270,10 +270,16 @@ const tree    = document.getElementById('tree');
       persistSelection(rel); saveLocal(rel);
       setUrlSelection(rel);      
 
-      const kind   = data.kind || 'unknown';
-      const ext    = (data.ext || '').toLowerCase();
-      const result = data.result || {};
-      const raw    = typeof data.raw === 'string' ? data.raw : '';
+      const kind = (data.kind ?? result?.kind ?? 'unknown').toLowerCase();
+      const ext  = (data.ext  ?? result?.ext  ?? '').toLowerCase();
+
+      const result = data.result ?? data.payload ?? data.data ?? {};
+      const raw = typeof data.raw === 'string' ? data.raw : (result && typeof result.raw === 'string' ? result.raw : '');
+
+      const textLikeExts  = ['txt','khn','anc','ann','cln','clc'];
+      const textLikeKinds = ['txt','khn']; // keep xml/lsx rendered as JSON by default
+      const isTextLike    = textLikeExts.includes(ext) || textLikeKinds.includes((kind || '').toLowerCase());
+      
 
       if (kind === 'image') {
         if (result.dataUri) {
@@ -285,9 +291,13 @@ const tree    = document.getElementById('tree');
         }
         return;
       }
+      if (isTextLike && raw) {
+        view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
+        return;
+      }
 
-      if (['xml', 'txt', 'khn', 'lsx'].includes(kind)) {
-        view.innerHTML = renderJson(result || raw || data);
+      if (['xml','lsx'].includes((kind || '').toLowerCase())) {
+        view.innerHTML = renderJson(result || data);
         return;
       }
 
@@ -295,7 +305,7 @@ const tree    = document.getElementById('tree');
         view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
       } else {
         view.innerHTML = renderJson(result || data);
-      }
+     }
     } catch (err) {
       view.innerHTML = `<div class="flash-red">Failed to load: ${esc(err.message||String(err))}</div>`;
     }

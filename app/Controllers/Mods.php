@@ -22,10 +22,6 @@ namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 use App\Services\PathResolver;
-use App\Helpers\XmlHelper;
-use App\Helpers\TextParserHelper;
-use App\Libraries\LsxHelper;
-use App\Libraries\LocalizationScanner;
 
 class Mods extends BaseController
 {
@@ -206,66 +202,17 @@ class Mods extends BaseController
 
         // File
         try {
-            $bytes = service('contentService')->read($abs);
+            $file = service('contentService')->open($abs);
+            $kind    = $file['kind']    ?? 'unknown';
+            $ext     = $file['ext']     ?? '';
+            $payload = $file['payload'] ?? null;
+            $meta    = $file['meta']    ?? [];
+            $rawOut  = $file['raw']     ?? null;   // see step 3 below
         } catch (\Throwable $e) {
             return $this->notFound('File not found');
         }
 
-        $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-        $kinds = service('mimeGuesser');
-        $kind  = $kinds->kindFromExt($ext);
-
-        $payload = null;
-        $meta    = [];
-
-        switch ($kind) {
-            case 'txt':
-            case 'khn':
-                $payload = $this->tryTxtToJson($bytes);
-                break;
-
-            case 'xml':
-                $payload = $this->tryXmlToJson($bytes);
-                break;
-
-            case 'lsx': {
-                // Detect region + group and parse with handle-map enrichment
-                $modAbs    = service('pathResolver')->join($rootKey, $slug, null);
-                $scanner   = new LocalizationScanner(true, false);
-                $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
-                $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
-
-                $region      = LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
-                $regionGroup = LsxHelper::regionGroupFromId($region);
-
-                $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
-                $payload  = json_decode($jsonTree, true);
-
-                $meta['region']      = $region;
-                $meta['regionGroup'] = $regionGroup;
-                break;
-            }
-
-            case 'image':
-                if ($ext === 'dds') {
-                    $uri = service('imageTransformer')->ddsToPngDataUri($abs);
-                    $payload = ['dataUri' => $uri, 'converted' => (bool)$uri, 'from' => 'dds'];
-                } else {
-                    $payload = [
-                        'dataUri'   => 'data:' . $kinds->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
-                        'converted' => false,
-                    ];
-                }
-                break;
-
-            default:
-                $payload = ['raw' => $bytes];
-                break;
-        }
-
         if ($this->wantsJson()) {
-            $rawOut = in_array($kind, ['txt','khn','xml','lsx','unknown'], true) ? $bytes : null;
-
             $this->selection->remember([
                 'root'    => $rootKey,
                 'slug'    => $slug,
@@ -282,9 +229,9 @@ class Mods extends BaseController
                 'ext'         => $ext,
                 'kind'        => $kind,
                 'result'      => $payload,
-                'raw'         => $rawOut,
-                'region'      => $meta['region']      ?? null,
-                'regionGroup' => $meta['regionGroup'] ?? null,
+                'raw'         => $rawOut,                           // from $file
+                'region'      => $meta['region']      ?? null,      // from $file
+                'regionGroup' => $meta['regionGroup'] ?? null,      // from $file
                 'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
             ]);
         }
@@ -297,7 +244,6 @@ class Mods extends BaseController
             'kind'    => $kind,
         ]);
 
-        // HTML view fallback (inline rendering is normally in browse.php)
         return $this->response->setBody(view('mods/file', [
             'pageTitle' => "{$slug}",
             'root'      => $rootKey,
@@ -306,8 +252,8 @@ class Mods extends BaseController
             'ext'       => $ext,
             'kind'      => $kind,
             'result'    => $payload,
-            'raw'       => $bytes,
-            'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+            'raw'       => $rawOut, 
+            'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
         ]));
     }
 
@@ -322,11 +268,9 @@ class Mods extends BaseController
             $raw      = $this->request->getPost('data');       // optional raw text
             $dataJson = $this->request->getPost('data_json');  // optional JSON string
 
-            $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-            $kind  = service('mimeGuesser')->kindFromExt($ext);
-            $bytes = $this->composePayloadForWrite($kind, $raw, $dataJson);
-
-            service('contentService')->write($abs, $bytes, true);
+            $result = service('contentService')->save($abs, $raw, $dataJson); // new service method
+            $ext    = $result['ext']  ?? strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+            $kind   = $result['kind'] ?? service('mimeGuesser')->kindFromExt($ext);
 
             $this->selection->remember([
                 'root'    => $rootKey,
@@ -373,53 +317,96 @@ class Mods extends BaseController
         );
     }
 
-    private function tryTxtToJson(string $bytes): array
+    public function saveSelection(): \CodeIgniter\HTTP\ResponseInterface
     {
-        try {
-            $json = TextParserHelper::txtToJson($bytes, true); // pretty
-            $arr  = json_decode($json, true);
-            return is_array($arr) ? $arr : ['raw' => $bytes];
-        } catch (\Throwable $__) {
-            return ['raw' => $bytes];
-        }
-    }
-
-    private function tryXmlToJson(string $bytes): array
-    {
-        try {
-            $json = XmlHelper::createJson($bytes, true); // pretty
-            $arr  = json_decode($json, true);
-            return is_array($arr) ? $arr : ['raw' => $bytes];
-        } catch (\Throwable $__) {
-            return ['raw' => $bytes];
-        }
-    }
-
-    private function composePayloadForWrite(string $kind, ?string $raw, ?string $dataJson): string
-    {
-        // Prefer JSON when provided; fall back to raw
-        if (is_string($dataJson) && $dataJson !== '') {
-            switch ($kind) {
-                case 'txt':
-                case 'khn':
-                    return TextParserHelper::jsonToTxt($dataJson);
-                case 'xml': {
-                    // JSON must be an object with a single root
-                    $assoc = json_decode($dataJson, true);
-                    if (!is_array($assoc)) throw new \InvalidArgumentException('data_json must be valid JSON');
-                    if (count($assoc) === 1 && isset($assoc[array_key_first($assoc)])) {
-                        $assoc = $assoc[array_key_first($assoc)];
-                    }
-                    return XmlHelper::createXML('contentList', $assoc)->saveXML();
-                }
-                case 'lsx':
-                    // For LSX we currently accept raw XML; if JSON provided, store as JSON text
-                    return (string) ($raw ?? $dataJson);
-                default:
-                    return (string) ($raw ?? $dataJson);
+        // ---- Parse payload robustly (JSON or form/query), without throwing on bad JSON
+        $payload = null;
+        $ct = strtolower($this->request->getHeaderLine('Content-Type') ?? '');
+        if (str_contains($ct, 'application/json')) {
+            try {
+                $payload = $this->request->getJSON(true); // may throw; we catch
+            } catch (\Throwable $__) {
+                $payload = null;
             }
         }
-        return (string) ($raw ?? '');
-    }
-}
+        if (!is_array($payload) || $payload === []) $payload = $this->request->getPost();
+        if (!is_array($payload) || $payload === []) $payload = $this->request->getGet();
+        if (!is_array($payload)) $payload = [];
 
+        // Allow nested { selection: {...} }
+        if (isset($payload['selection']) && is_array($payload['selection'])) {
+            $payload = $payload['selection'];
+        }
+
+        // ---- Accept both legacy {root, slug, relPath} and current {base, path}
+        // Normalize fields
+        $root    = trim((string)($payload['root']    ?? ''));
+        $slug    = trim((string)($payload['slug']    ?? ''));
+        $relPath = trim((string)($payload['relPath'] ?? ''));
+        $base    = trim((string)($payload['base']    ?? '')); // e.g. "MyMods/<slug>"
+        $path    = trim((string)($payload['path']    ?? '')); // e.g. "Mods/<slug>/.../file.ext"
+        $ext     = trim((string)($payload['ext']     ?? ''));
+        $kind    = trim((string)($payload['kind']    ?? ''));
+
+        // If we weren’t given root/slug but did get base, split it
+        if (($root === '' || $slug === '') && $base !== '') {
+            // decode just in case it was URL-encoded
+            $baseDecoded = rawurldecode($base);
+            // split on first "/"
+            $parts = explode('/', $baseDecoded, 2);
+            $root  = $root !== '' ? $root : ($parts[0] ?? '');
+            $slug  = $slug !== '' ? $slug : ($parts[1] ?? '');
+        }
+
+        // If relPath missing but we have "path", use it
+        if ($relPath === '' && $path !== '') {
+            $relPath = rawurldecode($path);
+        }
+
+        // Derive ext/kind if needed
+        if ($ext === '' && $relPath !== '') {
+            $ext = strtolower(pathinfo($relPath, PATHINFO_EXTENSION));
+        }
+        if ($kind === '' && $ext !== '') {
+            try {
+                $kinds = service('mimeGuesser');
+                $kind  = $kinds->kindFromExt($ext);
+            } catch (\Throwable $__) {
+                $kind = 'unknown';
+            }
+        }
+
+        // Basic validation: need at least root and slug to store a per-mod selection
+        if ($root === '' || $slug === '') {
+            return $this->response->setStatusCode(400)->setJSON([
+                'ok'    => false,
+                'error' => 'Missing root/slug (provide {root,slug} or {base})',
+            ]);
+        }
+
+        // Persist
+        try {
+            $this->selection->remember(array_filter([
+                'root'    => $root,
+                'slug'    => $slug,
+                'relPath' => $relPath,
+                'ext'     => $ext,
+                'kind'    => $kind,
+            ], fn($v) => $v !== '' && $v !== null));
+        } catch (\Throwable $e) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'ok'    => false,
+                'error' => 'Failed to save selection',
+            ]);
+        }
+
+        // Return the latest selection for this mod
+        return $this->response->setJSON([
+            'ok'        => true,
+            'selection' => $this->selection->recall(['root' => $root, 'slug' => $slug]),
+        ]);
+    }
+
+
+}
+?>
