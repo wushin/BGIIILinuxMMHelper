@@ -73,50 +73,59 @@ class Mods extends BaseController
     public function listRoot(string $root): ResponseInterface
     {
         $rootKey = $this->pathResolver->canonicalKey($root);
-        $base = $this->pathResolver->root($root);
-        if (!service('directoryScanner')->rootUsable($rootKey)) { 
-            return $this->notFound("Root not configured: {$rootKey}");
+
+        // Ensure the configured root exists/usable
+        if (!service('directoryScanner')->rootUsable($rootKey)) {
+            return service('responseBuilder')->notFound(
+                $this->response,
+                $this->request,
+                "Root '{$rootKey}' is not configured or not accessible"
+            );
         }
 
         // Special behavior: for MyMods show the combined "browse" page
         if ($rootKey === 'MyMods') {
             $myMods = $this->getMyModsList();  // array of directory names
 
-            if ($this->wantsJson()) {
-                return $this->response->setJSON([
-                    'ok'    => true,
-                    'root'  => $rootKey,
-                    'mods'  => $myMods,
-                    'slug'  => '',
-                    'path'  => '',
-                    'tree'  => [], // no mod selected yet
-                ]);
-            }
-
-            return $this->response->setBody(view('mods/browse', [
-                'pageTitle'    => 'MyMods — Directories',
-                'root'         => $rootKey,
-                'slug'         => '',
-                'path'         => '',
-                'tree'         => [],     // empty until a mod is chosen
-                'myMods'       => $myMods, // top card content
-                'baseKey'      => 'mods/' . $rootKey,
-                'selectedFile' => null,
-            ]));
+            return service('responseBuilder')->ok(
+                $this->response,
+                $this->request,
+                [
+                    'ok'   => true,
+                    'root' => $rootKey,
+                    'mods' => $myMods,
+                    'slug' => '',
+                    'path' => '',
+                    'tree' => [], // no mod selected yet
+                ],
+                'mods/browse',
+                [
+                    'pageTitle'    => 'MyMods — Directories',
+                    'root'         => $rootKey,
+                    'slug'         => '',
+                    'path'         => '',
+                    'tree'         => [],      // empty until a mod is chosen
+                    'myMods'       => $myMods, // top card content
+                    'baseKey'      => 'mods/' . $rootKey,
+                    'selectedFile' => null,
+                ]
+            );
         }
 
         // Default behavior for other roots (GameData/UnpackedMods): directory list
         $mods = service('directoryScanner')->listTopLevel($rootKey);
 
-        if ($this->wantsJson()) {
-            return $this->response->setJSON(['ok' => true, 'root' => $rootKey, 'mods' => $mods]);
-        }
-
-        return $this->response->setBody(view('mods/mods', [
-            'pageTitle' => "BG3LinuxHelper — {$rootKey}",
-            'root'      => $rootKey,
-            'mods'      => $mods,
-        ]));
+        return service('responseBuilder')->ok(
+            $this->response,
+            $this->request,
+            ['ok' => true, 'root' => $rootKey, 'mods' => $mods],
+            'mods/mods',
+            [
+                'pageTitle' => "BG3LinuxHelper — {$rootKey}",
+                'root'      => $rootKey,
+                'mods'      => $mods,
+            ]
+        );
     }
 
     /**
@@ -133,36 +142,42 @@ class Mods extends BaseController
     public function mod(string $root, string $slug): ResponseInterface
     {
         $rootKey = $this->pathResolver->canonicalKey($root);
-        $abs     = service('pathResolver')->join($rootKey, $slug, null);
+
+        // 404 if the mod folder doesn't exist under this root
         if (!service('directoryScanner')->modExists($rootKey, $slug)) {
-            return $this->notFound('Mod not found');
-        }        
+            return service('responseBuilder')->notFound(
+                $this->response,
+                $this->request,
+                "Mod '{$slug}' not found in '{$rootKey}'"
+            );
+        }
 
         $tree = service('directoryScanner')->tree($rootKey, $slug);
+        $sel  = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
 
-        $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
-
-        if ($this->wantsJson()) {
-            return $this->response->setJSON([
+        return service('responseBuilder')->ok(
+            $this->response,
+            $this->request,
+            [
                 'ok'        => true,
                 'root'      => $rootKey,
                 'slug'      => $slug,
                 'path'      => '',
                 'tree'      => $tree,
-                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
-            ]);        
-        }
-
-        return $this->response->setBody(view('mods/browse', [
-            'pageTitle'    => $slug,
-            'root'         => $rootKey,
-            'slug'         => $slug,
-            'path'         => '',
-            'tree'         => $tree,
-            'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
-            'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
-            'selectedFile' => $sel['relPath'] ?? null,
-        ]));
+                'selection' => $sel,
+            ],
+            'mods/browse',
+            [
+                'pageTitle'    => $slug,
+                'root'         => $rootKey,
+                'slug'         => $slug,
+                'path'         => '',
+                'tree'         => $tree,
+                'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
+                'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
+                'selectedFile' => $sel['relPath'] ?? null,
+            ]
+        );
     }
 
     // GET /mods/{Root}/{slug}/{path...} → directory (tree) or file (content)
@@ -175,20 +190,21 @@ class Mods extends BaseController
         if (service('directoryScanner')->isDirectory($rootKey, $slug, $relPath)) {
             $tree = service('directoryScanner')->treeFromAbsolute($abs, $relPath);
 
-            $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
+        $sel = $this->selection->recall(['root' => $rootKey, 'slug' => $slug]);
 
-            if ($this->wantsJson()) {
-                return $this->response->setJSON([
-                    'ok'        => true,
-                    'root'      => $rootKey,
-                    'slug'      => $slug,
-                    'path'      => $relPath,
-                    'tree'      => $tree,
-                    'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
-                ]);
-            }
-
-            return $this->response->setBody(view('mods/browse', [
+        return service('responseBuilder')->ok(
+            $this->response,
+            $this->request,
+            [
+                'ok'        => true,
+                'root'      => $rootKey,
+                'slug'      => $slug,
+                'path'      => $relPath,
+                'tree'      => $tree,
+                'selection' => $sel,
+            ],
+            'mods/browse',
+            [
                 'pageTitle'    => "{$slug}/{$relPath}",
                 'root'         => $rootKey,
                 'slug'         => $slug,
@@ -197,7 +213,9 @@ class Mods extends BaseController
                 'myMods'       => $rootKey === 'MyMods' ? $this->getMyModsList() : [],
                 'baseKey'      => 'mods/' . $rootKey . '/' . $slug,
                 'selectedFile' => $sel['relPath'] ?? null,
-            ]));
+            ]
+        );
+
         }
 
         // File
@@ -209,33 +227,10 @@ class Mods extends BaseController
             $meta    = $file['meta']    ?? [];
             $rawOut  = $file['raw']     ?? null;   // see step 3 below
         } catch (\Throwable $e) {
-            return $this->notFound('File not found');
+            return service('responseBuilder')->notFound($this->response, $this->request, 'File not found');
         }
 
-        if ($this->wantsJson()) {
-            $this->selection->remember([
-                'root'    => $rootKey,
-                'slug'    => $slug,
-                'relPath' => $relPath,
-                'ext'     => $ext,
-                'kind'    => $kind,
-            ]);
-
-            return $this->response->setJSON([
-                'ok'          => true,
-                'root'        => $rootKey,
-                'slug'        => $slug,
-                'path'        => $relPath,
-                'ext'         => $ext,
-                'kind'        => $kind,
-                'result'      => $payload,
-                'raw'         => $rawOut,                           // from $file
-                'region'      => $meta['region']      ?? null,      // from $file
-                'regionGroup' => $meta['regionGroup'] ?? null,      // from $file
-                'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
-            ]);
-        }
-
+        // remember selection (unchanged)
         $this->selection->remember([
             'root'    => $rootKey,
             'slug'    => $slug,
@@ -244,17 +239,35 @@ class Mods extends BaseController
             'kind'    => $kind,
         ]);
 
-        return $this->response->setBody(view('mods/file', [
-            'pageTitle' => "{$slug}",
-            'root'      => $rootKey,
-            'slug'      => $slug,
-            'path'      => $relPath,
-            'ext'       => $ext,
-            'kind'      => $kind,
-            'result'    => $payload,
-            'raw'       => $rawOut, 
-            'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
-        ]));
+        return service('responseBuilder')->ok(
+            $this->response,
+            $this->request,
+            [
+                'ok'          => true,
+                'root'        => $rootKey,
+                'slug'        => $slug,
+                'path'        => $relPath,
+                'ext'         => $ext,
+                'kind'        => $kind,
+                'result'      => $payload,
+                'raw'         => $rawOut,
+                'region'      => $meta['region']      ?? null,
+                'regionGroup' => $meta['regionGroup'] ?? null,
+                'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+            ],
+            'mods/file',
+            [
+                'pageTitle' => "{$slug}",
+                'root'      => $rootKey,
+                'slug'      => $slug,
+                'path'      => $relPath,
+                'ext'       => $ext,
+                'kind'      => $kind,
+                'result'    => $payload,
+                'raw'       => $rawOut,
+                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+            ]
+        );
     }
 
     // POST /mods/{Root}/{slug}/file/{path...} → save
@@ -299,23 +312,6 @@ class Mods extends BaseController
     }
 
     /* ======================== HELPERS ======================== */
-
-    private function wantsJson(): bool
-    {
-        if (strtolower((string)$this->request->getGet('format')) === 'json') return true;
-        $accept = (string) ($this->request->getHeaderLine('Accept') ?? '');
-        return str_contains($accept, 'application/json');
-    }
-
-    private function notFound(string $msg): ResponseInterface
-    {
-        if ($this->wantsJson()) {
-            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'error' => $msg]);
-        }
-        return $this->response->setStatusCode(404)->setBody(
-            view('mods/error', ['pageTitle' => 'Not Found', 'message' => $msg])
-        );
-    }
 
     public function saveSelection(): \CodeIgniter\HTTP\ResponseInterface
     {
