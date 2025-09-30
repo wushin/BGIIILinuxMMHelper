@@ -18,12 +18,26 @@ class Display extends BaseController
         $content = Services::contentService();
 
         try {
-            $rootKey = $this->normalizeRoot($root);
-            $abs     = $paths->join($rootKey, $path);
-            $bytes   = $content->read($abs);
-            $mime    = $this->detectMime($abs);
+            $rootKey = $paths->canonicalKey($root);
 
-            // text-ish types with UTF-8 charset
+            $path    = ltrim($path, '/');
+            if ($path === '') {
+                return $this->response->setStatusCode(404)->setBody('Missing slug or file path.');
+            }
+
+            $firstSlashPos = strpos($path, '/');
+            if ($firstSlashPos === false) {
+                $slug    = $path;     // only a slug, no relPath
+                $relPath = null;      // join() will point to the mod root (directory)
+            } else {
+                $slug    = substr($path, 0, $firstSlashPos);
+                $relPath = substr($path, $firstSlashPos + 1); // may be multi-segment
+            }
+
+            $abs   = $paths->join($rootKey, $slug, $relPath);
+            $bytes = $content->read($abs);
+            $mime  = $this->detectMime($abs);
+
             if (str_starts_with($mime, 'text/') || $mime === 'application/xml') {
                 return $this->response
                     ->setContentType($mime, 'utf-8')
@@ -35,8 +49,8 @@ class Display extends BaseController
                 ->setHeader('Content-Disposition', 'inline; filename="' . basename($abs) . '"')
                 ->setContentType($mime)
                 ->setBody($bytes);
+
         } catch (\Throwable $e) {
-            // 400 for invalid root/escape attempts, 404 if path looks like a file that doesn't exist, else 500
             $code = $this->statusFromException($e, $path);
             return $this->response->setStatusCode($code)->setBody($e->getMessage());
         }
@@ -53,20 +67,43 @@ class Display extends BaseController
         $content = Services::contentService();
 
         try {
-            $rootKey = $this->normalizeRoot($root);
-            $abs     = $paths->join($rootKey, $path);
+            // 1) Canonicalize root via PathResolver
+            $rootKey = $paths->canonicalKey($root);
 
+            // 2) Split "{slug}/{relPath...}" → ($slug, $relPath)
+            $path = ltrim($path, '/');
+            if ($path === '') {
+                return $this->response->setStatusCode(404)->setJSON([
+                    'ok'    => false,
+                    'error' => 'Missing slug or file path.',
+                ]);
+            }
+
+            $firstSlashPos = strpos($path, '/');
+            if ($firstSlashPos === false) {
+                $slug    = $path;   // only slug provided
+                $relPath = null;    // join() will resolve to the mod root (dir)
+            } else {
+                $slug    = substr($path, 0, $firstSlashPos);
+                $relPath = substr($path, $firstSlashPos + 1); // may have multiple segments
+            }
+
+            // 3) Safe absolute path
+            $abs = $paths->join($rootKey, $slug, $relPath);
+
+            // 4) Read body (form field "content" or raw body)
             $body = $this->request->getPost('content');
             if ($body === null) {
                 $body = $this->request->getBody() ?? '';
             }
 
+            // 5) Write via ContentService (signature as you’ve defined)
             $content->write($abs, $body, true);
 
             return $this->response->setJSON([
-                'ok'   => true,
-                'path' => $abs,
-                'bytes'=> strlen($body),
+                'ok'    => true,
+                'path'  => $abs,
+                'bytes' => strlen($body),
             ]);
         } catch (\Throwable $e) {
             $code = $this->statusFromException($e, $path);
@@ -76,6 +113,7 @@ class Display extends BaseController
             ]);
         }
     }
+
 
     /**
      * GET /browse/{Root}[/path...]
