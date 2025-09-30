@@ -17,6 +17,14 @@ use League\CommonMark\Extension\HeadingPermalink\HeadingPermalinkExtension;
 
 class Services extends BaseService
 {
+    public static function exceptionMapper(bool $getShared = true): \App\Services\ExceptionMapper
+    {
+        if ($getShared) {
+            return static::getSharedInstance('exceptionMapper');
+        }
+        return new \App\Services\ExceptionMapper();
+    }
+
     public static function contentService(bool $getShared = true): ContentService
     {
         if ($getShared) {

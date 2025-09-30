@@ -140,7 +140,7 @@ class Mods extends BaseController
         try {
             return service('directoryScanner')->listTopLevel('MyMods');
         } catch (\Throwable $e) {
-            return [];
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
     }
 
@@ -237,7 +237,7 @@ class Mods extends BaseController
             $meta    = $file['meta']    ?? [];
             $rawOut  = $file['raw']     ?? null;   // see step 3 below
         } catch (\Throwable $e) {
-            return service('responseBuilder')->notFound($this->response, $this->request, 'File not found');
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
 
         // remember selection (unchanged)
@@ -317,7 +317,7 @@ class Mods extends BaseController
             ]);
 
         } catch (\Throwable $e) {
-            return $this->response->setStatusCode(500)->setJSON(['ok' => false, 'error' => $e->getMessage()]);
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
     }
 
@@ -400,10 +400,7 @@ class Mods extends BaseController
                 'kind'    => $kind,
             ], fn($v) => $v !== '' && $v !== null));
         } catch (\Throwable $e) {
-            return $this->response->setStatusCode(400)->setJSON([
-                'ok'    => false,
-                'error' => 'Failed to save selection',
-            ]);
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
 
         // Return the latest selection for this mod

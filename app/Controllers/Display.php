@@ -51,8 +51,7 @@ class Display extends BaseController
                 ->setBody($bytes);
 
         } catch (\Throwable $e) {
-            $code = $this->statusFromException($e, $path);
-            return $this->response->setStatusCode($code)->setBody($e->getMessage());
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
     }
 
@@ -105,11 +104,7 @@ class Display extends BaseController
             ]);
 
         } catch (\Throwable $e) {
-            $code = $this->statusFromException($e, $path);
-            return $this->response->setStatusCode($code)->setJSON([
-                'ok'    => false,
-                'error' => $e->getMessage(),
-            ]);
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
     }
 
@@ -135,11 +130,7 @@ class Display extends BaseController
                 'results' => $items,
             ]);
         } catch (\Throwable $e) {
-            $code = $this->statusFromException($e, $path);
-            return $this->response->setStatusCode($code)->setJSON([
-                'ok'    => false,
-                'error' => $e->getMessage(),
-            ]);
+            return service('responseBuilder')->error($this->response, $this->request, $e);
         }
     }
 
@@ -174,26 +165,5 @@ class Display extends BaseController
         };
     }
 
-    /** Derive an HTTP status code from an exception and path context. */
-    private function statusFromException(\Throwable $e, string $path): int
-    {
-        $msg = $e->getMessage();
-        if (str_contains($msg, 'not configured') || str_contains($msg, 'escape')) {
-            return 400;
-        }
-        // Prefer exception type/message over hitting the filesystem here
-        $code = (int) ($e->getCode() ?? 0);
-        if ($code === 404) {
-            return 404;
-        }
-        if (!empty($path)) {
-            $m = strtolower($msg);
-            if (str_contains($m, 'not found') || str_contains($m, 'no such file') || str_contains($m, 'does not exist')) {
-                return 404;
-            }
-        }
-        
-        return 500;
-    }
 }
 ?>

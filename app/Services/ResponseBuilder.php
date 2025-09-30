@@ -52,5 +52,35 @@ class ResponseBuilder
             ->setBody(view($errorView, array_merge(['pageTitle' => 'Not Found', 'message' => $message], $extraViewData)));
     }
 
+    public function error(
+        ResponseInterface $res,
+        RequestInterface $req,
+        \Throwable $e,
+        ?int $forceStatus = null
+    ): ResponseInterface {
+        $mapper = service('exceptionMapper');
+        $status = $forceStatus ?? $mapper->status($e);
+        $type   = $mapper->shortType($e);
+
+        if ($this->wantsJson($req)) {
+            return $res
+                ->setStatusCode($status)
+                ->setJSON([
+                    'ok'    => false,
+                    'error' => $e->getMessage(),
+                    'type'  => $type,
+                    'code'  => $status,
+                ]);
+        }
+
+        // HTML fallback uses your existing error view
+        return $res
+            ->setStatusCode($status)
+            ->setBody(view('mods/error', [
+                'pageTitle' => "{$status} {$type}",
+                'message'   => $e->getMessage(),
+            ]));
+    }
+
 }
 ?>
