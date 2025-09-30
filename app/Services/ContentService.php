@@ -189,43 +189,12 @@ class ContentService
                 $rawOut = $includeRaw($bytes);
                 break;
 
-            case 'lsx': {
-                // Optional LSX enrichment using LocalizationScanner & handle map
-                $region      = \App\Libraries\LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
-                $regionGroup = \App\Libraries\LsxHelper::regionGroupFromId($region);
-                $meta['region']      = $region;
-                $meta['regionGroup'] = $regionGroup;
-
-                $jsonTree = null;
-                try {
-                    $scanner = new \App\Libraries\LocalizationScanner(true, false);
-
-                    // build handle map ONLY if we have mod context
-                    $handleMap = null;
-                    if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
-                        $modAbs    = service('pathResolver')->join($ctx['rootKey'], $ctx['slug'], null);
-                        $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
-                        $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
-                    } else {
-                        $handleMap = []; // empty map fallback
-                    }
-
-                    // parse LSX using (possibly empty) handle map
-                    $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
-                } catch (\Throwable $__) {
-                    // as a fallback, try generic XML→JSON if LSX pipeline fails
-                    try {
-                        $jsonTree = \App\Helpers\XmlHelper::createJson($bytes, true);
-                    } catch (\Throwable $___) {
-                        $jsonTree = null;
-                    }
-                }
-
-                $arr = $jsonTree ? json_decode($jsonTree, true) : null;
-                $payload = is_array($arr) ? $arr : ['raw' => $bytes];
+            case 'lsx':
+                $lsx = service('lsxService')->parse($bytes, $ctx);
+                $payload = $lsx['payload'];
+                $meta    = $lsx['meta'];
                 $rawOut  = $includeRaw($bytes);
                 break;
-            }
 
             case 'image':
                 if ($ext === 'dds') {

@@ -7,6 +7,7 @@ use App\Services\PathResolver;
 use App\Services\ContentService;
 use App\Config\Selection as SelectionConfig;
 use App\Services\SelectionService;
+use App\Services\LsxService;
 use Config\BG3Paths;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\MarkdownConverter;
@@ -37,14 +38,6 @@ class Services extends BaseService
     {
         if ($getShared) return static::getSharedInstance('directoryScanner');
         return new \App\Services\DirectoryScanner();
-    }
-
-    public static function lsxService(bool $getShared = true)
-    {
-        if ($getShared) return static::getSharedInstance('lsxService');
-        // LocalizationScanner lives in App\Libraries and has its own config
-        $scanner = new \App\Libraries\LocalizationScanner(true, false);
-        return new \App\Services\LsxService(config(LsxRegions::class), $scanner);
     }
 
     public static function imageTransformer(bool $getShared = true)
@@ -143,6 +136,14 @@ class Services extends BaseService
         $session = service('session');
 
         return new SelectionService($config, $session);
+    }
+
+    public static function lsxService(bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('lsxService');
+        }
+        return new LsxService(static::pathResolver());
     }
 
 }
