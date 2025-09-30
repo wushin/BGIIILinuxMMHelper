@@ -66,7 +66,22 @@ class LsxRegions extends BaseConfig
 
     public function groupFor(string $region): string
     {
-        return $this->groupByRegion[$region] ?? 'unknown';
+        if ($region === '') {
+            return 'unknown';
+        }
+        // Exact match first
+        if (isset($this->groupByRegion[$region])) {
+            return $this->groupByRegion[$region];
+        }
+        // Case-insensitive fallback
+        $lower = strtolower($region);
+        foreach ($this->groupByRegion as $key => $val) {
+            if (strtolower($key) === $lower) {
+                return $val;
+            }
+        }
+        return 'unknown';
     }
-}
 
+}
+?>

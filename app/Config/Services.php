@@ -140,12 +140,23 @@ class Services extends BaseService
         return new SelectionService($config, $session);
     }
 
+    public static function lsxHelper(bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('lsxHelper');
+        }
+        return new \App\Libraries\LsxHelper();
+    }
+
     public static function lsxService(bool $getShared = true)
     {
         if ($getShared) {
             return static::getSharedInstance('lsxService');
         }
-        return new \App\Services\LsxService(static::pathResolver());
+        return new \App\Services\LsxService(
+            static::pathResolver(),
+            service('lsxHelper') // inject instance
+        );
     }
 
     public static function parserFactory(bool $getShared = true)

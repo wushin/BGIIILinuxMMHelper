@@ -189,10 +189,21 @@ class ContentService
                 break;
 
             case 'lsx':
-                $lsx = service('lsxService')->parse($bytes, $ctx);
-                $payload = $lsx['payload'];
-                $meta    = $lsx['meta'];
-                $rawOut  = $includeRaw($bytes);
+                try {
+                    $lsx     = service('lsxService')->parse($bytes, $ctx);
+                    $payload = $lsx['payload'] ?? ['raw' => $bytes];
+                    $meta    = $lsx['meta']    ?? [];
+                } catch (\Throwable $e) {
+                    // Do NOT 404 just because enrichment failed; return raw + error note
+                    $payload = ['raw' => $bytes];
+                    $meta    = [
+                        'region'      => null,
+                        'regionGroup' => null,
+                        'error'       => $e->getMessage(),
+                    ];
+                    log_message('error', 'LSX parse failed: {msg}', ['msg' => $e->getMessage()]);
+                }
+                $rawOut = $includeRaw($bytes);
                 break;
 
             case 'image':

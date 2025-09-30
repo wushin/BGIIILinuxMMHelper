@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Libraries;
+use Config\LsxRegions;
+
 
 /**
  * LsxHelper — class-based utility for LSX region & grouping detection.
@@ -37,110 +39,32 @@ class LsxHelper
      * Map a region id/name to a coarse group: dialog|gameplay|assets|meta|unknown.
      * Includes explicit map + light heuristics (case-insensitive).
      */
-    public static function regionGroupFromId(?string $region): string
+    function regionGroupFromId(?string $region): string
     {
-        if (!$region) return 'unknown';
+        if (!$region) {
+            return 'unknown';
+        }
         $r = trim($region);
-        if ($r === '') return 'unknown';
-
-        static $map = null;
-        if ($map === null) {
-            // Canonical mapping (extend anytime). Keys are lowercased.
-            $map = array_change_key_case([
-                // dialog / narrative
-                'dialog' => 'dialog',
-                'dialogbank' => 'dialog',
-                'timelinebank' => 'dialog',
-                'timelinecontent' => 'dialog',
-                'tlscene' => 'dialog',
-                'tlscenebank' => 'dialog',
-                'tlsystemconfig' => 'dialog',
-                'sceneconfig' => 'dialog',
-                'voices' => 'dialog',
-                'voicebarkbank' => 'dialog',
-
-                // assets / visuals
-                'texturebank' => 'assets',
-                'textureatlasinfo' => 'assets',
-                'materialbank' => 'assets',
-                'charactervisualbank' => 'assets',
-                'visualbank' => 'assets',
-                'iconuvlist' => 'assets',
-                'lightingbank' => 'assets',
-                'lightingdetails' => 'assets',
-                'virtualtexturebank' => 'assets',
-                'meshproxybank' => 'assets',
-                'skeletonbank' => 'assets',
-                'animationbank' => 'assets',
-                'animationsetbank' => 'assets',
-                'animationsetpriorities' => 'assets',
-                'colourgradings' => 'assets',
-
-                // gameplay / rules
-                'abilitydistributionpresets' => 'gameplay',
-                'actionresourcedefinitions'  => 'gameplay',
-                'backgrounds'                => 'gameplay',
-                'charactercreationappearancevisuals' => 'gameplay',
-                'charactercreationpresets'   => 'gameplay',
-                'classdescriptions'          => 'gameplay',
-                'conditionerrors'            => 'gameplay',
-                'defaultvalues'              => 'gameplay',
-                'effect'                     => 'gameplay',
-                'effectbank'                 => 'gameplay',
-                'enterphasesoundevents'      => 'gameplay',
-                'entersoundevents'           => 'gameplay',
-                'equipmentlists'             => 'gameplay',
-                'exitphasesoundevents'       => 'gameplay',
-                'exitsoundevents'            => 'gameplay',
-                'factioncontainer'           => 'gameplay',
-                'factionmanager'             => 'gameplay',
-                'flags'                      => 'gameplay',
-                'levelmapvalues'             => 'gameplay',
-                'multieffectinfos'           => 'gameplay',
-                'origins'                    => 'gameplay',
-                'passivelists'               => 'gameplay',
-                'progressiondescriptions'    => 'gameplay',
-                'progressions'               => 'gameplay',
-                'races'                      => 'gameplay',
-                'skilllists'                 => 'gameplay',
-                'spelllists'                 => 'gameplay',
-                'tags'                       => 'gameplay',
-                'templates'                  => 'gameplay',
-                'tooltipextratexts'          => 'gameplay',
-                'quests'                     => 'gameplay',
-                'questcategories'            => 'gameplay',
-                'feats'                      => 'gameplay',
-                'featdescriptions'           => 'gameplay',
-                'rulesets'                   => 'gameplay',
-                'rulesetmodifiers'           => 'gameplay',
-                'rulesetmodifieroptions'     => 'gameplay',
-                'rulesetselectionpresets'    => 'gameplay',
-                'rulesetvalues'              => 'gameplay',
-                'experiencerewards'          => 'gameplay',
-                'longrestcosts'              => 'gameplay',
-                'tadpolepowerstree'          => 'gameplay',
-                'gods'                       => 'gameplay',
-
-                // meta
-                'config'        => 'meta',
-                'dependencies'  => 'meta',
-                'metadata'      => 'meta',
-                'modulesettings'=> 'meta',
-            ], CASE_LOWER);
+        if ($r === '') {
+            return 'unknown';
         }
 
-        $key = strtolower($r);
-        if (isset($map[$key])) {
-            return $map[$key];
+        // Single source of truth: Config\LsxRegions
+        $cfg   = config(LsxRegions::class);
+        $group = $cfg->groupFor($r);
+
+        if ($group !== 'unknown') {
+            return $group;
         }
 
-        // Heuristics (in case region not in the explicit map)
+        // Heuristics fallback for unmapped regions (keep your current patterns)
         if (preg_match('/dialog|timeline|scene/i', $r))  return 'dialog';
         if (preg_match('/texture|material|visual|icon|mesh|skeleton|lighting|anim/i', $r)) return 'assets';
-        if (preg_match('/progress|spell|feat|ruleset|equip|status|passive|race|class|skill|quest|tag|template|reward/i', $r)) return 'gameplay';
+        if (preg_match('/progress|spell|feat|ruleset|equip|status|class|skill|quest|tag|template|reward/i', $r)) return 'gameplay';
         if (preg_match('/meta|config|depend/i', $r))     return 'meta';
 
         return 'unknown';
     }
+
 }
 ?>

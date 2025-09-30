@@ -7,7 +7,12 @@ use App\Libraries\LsxHelper;
 
 final class LsxService
 {
-    public function __construct(private readonly PathResolver $paths) {}
+    public function __construct(
+        private readonly PathResolver $paths,
+        private ?\App\Libraries\LsxHelper $helper = null
+    ) {
+        $this->helper ??= service('lsxHelper');
+    }
 
     /**
      * Parse LSX bytes with optional enrichment (region/group + handle-map).
@@ -17,11 +22,13 @@ final class LsxService
      */
     public function parse(string $bytes, array $ctx = []): array
     {
+        $region = $this->helper->detectRegionFromHead($bytes);
+        $group  = $this->helper->regionGroupFromId($region);
+
         $meta = [
-            'region'      => LsxHelper::detectRegionFromHead($bytes) ?? 'unknown',
-            'regionGroup' => null,
+            'region' => $region,
+            'regionGroup'  => $group,
         ];
-        $meta['regionGroup'] = LsxHelper::regionGroupFromId($meta['region']);
 
         $jsonTree = null;
 
