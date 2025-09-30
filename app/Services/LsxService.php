@@ -60,6 +60,13 @@ final class LsxService
             'region' => $region,
             'regionGroup'  => $group,
         ];
+        $normalizer = service('lsxNormalizer');
+        try {
+            $payload = $normalizer->normalize($bytes);   // ← canonical JSON tree
+        } catch (\Throwable $e) {
+            // Fallback: keep working even if a file isn’t strictly well-formed
+            $payload = ['raw' => $bytes, 'error' => $e->getMessage()];
+        }
 
         $jsonTree = null;
 

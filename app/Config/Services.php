@@ -193,5 +193,13 @@ class Services extends BaseService
         }
         return new \App\Services\Telemetry();
     }
+
+    public static function lsxNormalizer(bool $getShared = true): \App\Services\LsxNormalizer
+    {
+        if ($getShared) {
+            return static::getSharedInstance('lsxNormalizer');
+        }
+        return new \App\Services\LsxNormalizer();
+    }
 }
 ?>
