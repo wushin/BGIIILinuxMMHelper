@@ -97,14 +97,13 @@ class Display extends BaseController
                 $body = $this->request->getBody() ?? '';
             }
 
-            // 5) Write via ContentService (signature as you’ve defined)
-            $content->write($abs, $body, true);
-
+            $result = $content->saveEditor($abs, $body, null); // raw text save
             return $this->response->setJSON([
-                'ok'    => true,
-                'path'  => $abs,
-                'bytes' => strlen($body),
+              'ok'    => true,
+              'path'  => $result['path'],
+              'bytes' => $result['bytes'], // <- actual bytes written
             ]);
+
         } catch (\Throwable $e) {
             $code = $this->statusFromException($e, $path);
             return $this->response->setStatusCode($code)->setJSON([

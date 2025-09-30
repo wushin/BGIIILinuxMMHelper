@@ -54,8 +54,10 @@ class Services extends BaseService
 
     public static function mimeGuesser(bool $getShared = true)
     {
-        if ($getShared) return static::getSharedInstance('mimeGuesser');
-        return new \App\Services\MimeGuesser(config(\Config\FileKinds::class));
+        if ($getShared) {
+            return static::getSharedInstance('mimeGuesser');
+        }
+        return new \App\Services\MimeGuesser(new \Config\FileKinds());
     }
 
     public static function markdown(bool $getShared = true): MarkdownConverter
@@ -143,8 +145,18 @@ class Services extends BaseService
         if ($getShared) {
             return static::getSharedInstance('lsxService');
         }
-        return new LsxService(static::pathResolver());
+        return new \App\Services\LsxService(static::pathResolver());
     }
 
+    public static function parserFactory(bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('parserFactory');
+        }
+        return new \App\Services\Parsers\ParserFactory(
+            service('mimeGuesser'),
+            service('lsxService')
+        );
+    }
 }
 ?>

@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Services\ContentService;
 use App\Services\PathResolver;
 use Config\BG3Paths;
 use App\Services\MimeGuesser;
@@ -11,7 +10,7 @@ use App\Libraries\LocalizationScanner;
 use App\Libraries\LsxHelper;
 use App\Helpers\TextParserHelper;
 use App\Helpers\XmlHelper;
-
+use App\Services\Parsers\ParserFactory;
 
 /**
  * ContentService centralizes safe file reading/writing and basic directory listing.
@@ -278,49 +277,14 @@ class ContentService
         $bytesToWrite = null;
         $warnings     = [];
 
-        // Treat these as plain-text files
-        $textLikeExts  = ['txt','khn','anc','ann','cln','clc'];
-        $textLikeKinds = ['txt','khn','unknown'];
-        $isTextLike    = in_array($ext, $textLikeExts, true) || in_array($kind, $textLikeKinds, true);
+        $parser = service('parserFactory')->forPath($abs);
 
-        if ($isTextLike) {
-            if ($raw !== null && $raw !== '') {
-                $bytesToWrite = $raw;
-            } elseif ($json !== null && $json !== '') {
-                // If UI sent a string that is the intended file contents, accept it.
-                // If UI sent structured JSON, writing it verbatim is probably not desired.
-                // Keep it simple: write the string as-is (caller controls the UI).
-                $bytesToWrite = $json;
-            } else {
-                throw new \RuntimeException('Nothing to save: provide raw or json for text-like kinds.');
-            }
-        } elseif (in_array($kind, ['xml','lsx'], true)) {
-            if ($raw !== null && $raw !== '') {
-                // For now, accept raw XML/LSX only. JSON→XML conversion will be added later.
-                $bytesToWrite = $raw;
-            } elseif ($json !== null && $json !== '') {
-                // Future work: convert structured JSON back to XML/LSX via dedicated parser.
-                throw new \RuntimeException('Saving XML/LSX from JSON is not implemented yet.');
-            } else {
-                throw new \RuntimeException('Nothing to save for XML/LSX.');
-            }
-        } else {
-            // Binary/other kinds: only accept raw bytes
-            if ($raw !== null && $raw !== '') {
-                $bytesToWrite = $raw;
-            } else {
-                throw new \RuntimeException('This file type requires raw bytes to save.');
-            }
+        // Delegate to parser: enforce policy first
+        if (in_array($kind, ['image', 'unknown'], true) && $json !== null) {
+            throw new \RuntimeException('JSON writes not allowed for this file type.');
         }
 
-        // Ensure parent exists
-        $dir = dirname($abs);
-        if (!is_dir($dir)) {
-            if (!@mkdir($dir, 0775, true) && !is_dir($dir)) {
-                throw new \RuntimeException("Failed to create directory: {$dir}");
-            }
-        }
-
+        $bytesToWrite = $parser->write($raw, $json, $abs);
         // Write atomically-ish
         $bytesWritten = $this->write($abs, $bytesToWrite, true);
 
