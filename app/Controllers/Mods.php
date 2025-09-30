@@ -384,10 +384,12 @@ class Mods extends BaseController
 
         // Basic validation: need at least root and slug to store a per-mod selection
         if ($root === '' || $slug === '') {
-            return $this->response->setStatusCode(400)->setJSON([
-                'ok'    => false,
-                'error' => 'Missing root/slug (provide {root,slug} or {base})',
-            ]);
+            return service('responseBuilder')->error(
+                $this->response,
+                $this->request,
+                new \InvalidArgumentException('Missing root/slug (provide {root,slug} or {base})'),
+                400
+            );
         }
 
         // Persist

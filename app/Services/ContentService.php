@@ -147,6 +147,10 @@ class ContentService
         $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
         $kinds = service('mimeGuesser');
         $kind  = $kinds->kindFromExt($ext);
+        log_message('info', 'Open {kind} file {abs}', [
+            'kind' => $kind,
+            'abs'  => $abs,
+        ]);
 
         // Raw inclusion policy (only for text-like kinds, and capped)
         $RAW_LIMIT = 256 * 1024; // 256 KiB default cap

@@ -22,7 +22,12 @@ class Display extends BaseController
 
             $path    = ltrim($path, '/');
             if ($path === '') {
-                return $this->response->setStatusCode(404)->setBody('Missing slug or file path.');
+                return service('responseBuilder')->error(
+                    $this->response,
+                    $this->request,
+                    new \InvalidArgumentException('Missing slug or file path.'),
+                    404
+                );            
             }
 
             $firstSlashPos = strpos($path, '/');

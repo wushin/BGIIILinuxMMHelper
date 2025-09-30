@@ -22,6 +22,7 @@ final class LsxService
      */
     public function parse(string $bytes, array $ctx = []): array
     {
+        $__t0 = hrtime(true);
         $region = $this->helper->detectRegionFromHead($bytes);
         $group  = $this->helper->regionGroupFromId($region);
 
@@ -57,6 +58,13 @@ final class LsxService
         if (!is_array($payload)) {
             $payload = ['raw' => $bytes];
         }
+        $__ms = (hrtime(true) - $__t0) / 1e6;
+        log_message('info', 'LSX parse {path} region={region} group={group} ms={ms}', [
+            'path'   => ($ctx['relPath'] ?? $ctx['abs'] ?? '(unknown)'),
+            'region' => $meta['region'] ?? null,
+            'group'  => $meta['regionGroup'] ?? null,
+            'ms'     => number_format($__ms, 3),
+        ]);
 
         return ['payload' => $payload, 'meta' => $meta];
     }
