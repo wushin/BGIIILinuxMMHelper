@@ -127,78 +127,133 @@ class ContentService
         return $s;
     }
 
-    public function open(string $abs): array
+    /**
+     * Read & interpret a file and return a normalized payload for controllers/views.
+     * Returns:
+     * [
+     *   'kind'    => string,           // txt|xml|lsx|image|unknown...
+     *   'ext'     => string,           // file extension lowercased
+     *   'payload' => array|null,       // parsed structure (text/xml/lsx/image)
+     *   'raw'     => ?string,          // original bytes (policy-limited)
+     *   'meta'    => array,            // region/group, etc for LSX
+     * ]
+     *
+     * $ctx is optional but recommended for LSX enrichment:
+     *   ['rootKey' => 'MyMods', 'slug' => '<mod-slug>', 'relPath' => '...']
+     */
+    public function open(string $abs, array $ctx = []): array
     {
-        // 1) Read bytes (reuse your existing low-level read)
-        $bytes = $this->read($abs); // throws on error
-
-        // 2) Identify ext/kind
+        // ------------- read bytes -------------
+        $bytes = $this->read($abs); // you already have this
         $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-        /** @var MimeGuesser $kinds */
         $kinds = service('mimeGuesser');
         $kind  = $kinds->kindFromExt($ext);
 
+        // Raw inclusion policy (only for text-like kinds, and capped)
+        $RAW_LIMIT = 256 * 1024; // 256 KiB default cap
+        $includeRaw = function (string $s) use ($RAW_LIMIT): string {
+            if (strlen($s) <= $RAW_LIMIT) return $s;
+            return substr($s, 0, $RAW_LIMIT); // soft cap; you can also add a meta flag
+        };
+
         $payload = null;
+        $rawOut  = null;
         $meta    = [];
 
+        // ------------- helpers -------------
+        $isTextLikeExts  = ['txt','khn','anc','ann','cln','clc'];
+        $isTextLike      = in_array($ext, $isTextLikeExts, true) || in_array($kind, ['txt','khn','unknown'], true);
+
+        // ------------- kind switch -------------
         switch ($kind) {
             case 'txt':
             case 'khn':
                 try {
-                    $json = TextParserHelper::txtToJson($bytes, true);
+                    $json = \App\Helpers\TextParserHelper::txtToJson($bytes, true);
                     $arr  = json_decode($json, true);
                     $payload = is_array($arr) ? $arr : ['raw' => $bytes];
                 } catch (\Throwable $__) {
                     $payload = ['raw' => $bytes];
                 }
+                $rawOut = $includeRaw($bytes);
                 break;
 
             case 'xml':
                 try {
-                    $json = XmlHelper::createJson($bytes, true);
+                    $json = \App\Helpers\XmlHelper::createJson($bytes, true);
                     $arr  = json_decode($json, true);
                     $payload = is_array($arr) ? $arr : ['raw' => $bytes];
                 } catch (\Throwable $__) {
                     $payload = ['raw' => $bytes];
                 }
+                $rawOut = $includeRaw($bytes);
                 break;
 
             case 'lsx': {
-                // Infer mod root to locate localization XMLs for handle-map enrichment
-                [$rootKey, $slug] = $this->inferRootAndSlugFromAbsolute($abs);
-
-                $scanner   = new LocalizationScanner(true, false);
-                $modAbs    = $rootKey && $slug ? service('pathResolver')->join($rootKey, $slug, null) : null;
-                $langXmls  = $modAbs ? $scanner->findLocalizationXmlsForMod($modAbs) : [];
-                $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
-
-                $region      = LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
-                $regionGroup = LsxHelper::regionGroupFromId($region);
-
-                $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
-                $payload  = json_decode($jsonTree, true);
-
+                // Optional LSX enrichment using LocalizationScanner & handle map
+                $region      = \App\Libraries\LsxHelper::detectRegionFromHead($bytes) ?? 'unknown';
+                $regionGroup = \App\Libraries\LsxHelper::regionGroupFromId($region);
                 $meta['region']      = $region;
                 $meta['regionGroup'] = $regionGroup;
+
+                $jsonTree = null;
+                try {
+                    $scanner = new \App\Libraries\LocalizationScanner(true, false);
+
+                    // build handle map ONLY if we have mod context
+                    $handleMap = null;
+                    if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
+                        $modAbs    = service('pathResolver')->join($ctx['rootKey'], $ctx['slug'], null);
+                        $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
+                        $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+                    } else {
+                        $handleMap = []; // empty map fallback
+                    }
+
+                    // parse LSX using (possibly empty) handle map
+                    $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
+                } catch (\Throwable $__) {
+                    // as a fallback, try generic XML→JSON if LSX pipeline fails
+                    try {
+                        $jsonTree = \App\Helpers\XmlHelper::createJson($bytes, true);
+                    } catch (\Throwable $___) {
+                        $jsonTree = null;
+                    }
+                }
+
+                $arr = $jsonTree ? json_decode($jsonTree, true) : null;
+                $payload = is_array($arr) ? $arr : ['raw' => $bytes];
+                $rawOut  = $includeRaw($bytes);
                 break;
             }
 
             case 'image':
                 if ($ext === 'dds') {
-                    /** @var ImageTransformer $img */
-                    $img = service('imageTransformer');
-                    $uri = $img->ddsToPngDataUri($abs);
-                    $payload = ['dataUri' => $uri, 'converted' => (bool) $uri, 'from' => 'dds'];
+                    try {
+                        $uri = service('imageTransformer')->ddsToPngDataUri($abs);
+                        $payload = ['dataUri' => $uri, 'converted' => (bool)$uri, 'from' => 'dds'];
+                    } catch (\Throwable $__) {
+                        // fall back to raw base64 with generic mime
+                        $payload = [
+                            'dataUri'   => 'data:' . $kinds->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
+                            'converted' => false,
+                        ];
+                    }
                 } else {
                     $payload = [
                         'dataUri'   => 'data:' . $kinds->mimeFromExt($ext) . ';base64,' . base64_encode($bytes),
                         'converted' => false,
                     ];
                 }
+                // no rawOut for images by default
                 break;
 
             default:
-                $payload = ['raw' => $bytes];
+                // Unknown/binary: no parsing, but allow small raw echo for “text-like unknown”
+                if ($isTextLike) {
+                    $rawOut = $includeRaw($bytes);
+                }
+                $payload = ['raw' => $isTextLike ? $rawOut : null];
                 break;
         }
 
@@ -206,9 +261,11 @@ class ContentService
             'kind'    => $kind,
             'ext'     => $ext,
             'payload' => $payload,
+            'raw'     => $rawOut,
             'meta'    => $meta,
         ];
     }
+
 
     /**
      * Infer (rootKey, slug) from an absolute path by checking configured roots.

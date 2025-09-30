@@ -220,7 +220,11 @@ class Mods extends BaseController
 
         // File
         try {
-            $file = service('contentService')->open($abs);
+            $file = service('contentService')->open($abs, [
+                'rootKey' => $rootKey,
+                'slug'    => $slug,
+                'relPath' => $relPath,
+            ]);
             $kind    = $file['kind']    ?? 'unknown';
             $ext     = $file['ext']     ?? '';
             $payload = $file['payload'] ?? null;
