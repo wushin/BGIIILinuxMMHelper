@@ -133,9 +133,11 @@ class Mods extends BaseController
      */
     private function getMyModsList(): array
     {
-        $dirs = service('directoryScanner')->listTopLevel('MyMods');
-        sort($dirs, SORT_NATURAL | SORT_FLAG_CASE);
-        return $dirs;
+        try {
+            return service('directoryScanner')->listTopLevel('MyMods');
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     // GET /mods/{Root}/{slug} → full recursive tree (left column)
