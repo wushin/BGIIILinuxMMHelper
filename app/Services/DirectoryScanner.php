@@ -14,6 +14,9 @@ class DirectoryScanner
 {
     private PathResolver $paths;
 
+    /** @var string[] lowercased, no leading dots */
+    private array $excludedExts = ['lsf', 'loca'];
+
     // Tunables
     private int $ttlTop      = 30;      // seconds: cache for top-level dir lists
     private int $ttlTree     = 30;      // seconds: cache for directory trees
@@ -229,11 +232,15 @@ class DirectoryScanner
                     } else {
                         // extension filter (lowercased, no dot)
                         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                        if ($this->isExcludedByExt($ext)) {
+                            continue;
+                        }
                         if ($exts !== null) {
                             if ($ext === '' || !in_array($ext, $exts, true)) {
                                 continue;
                             }
                         }
+                        
                         $files[] = [
                             'name'  => $name,
                             'isDir' => false,
@@ -315,6 +322,11 @@ class DirectoryScanner
             $seen
         );
         return is_array($node['children'] ?? null) ? $node['children'] : [$node];
+    }
+
+    private function isExcludedByExt(string $ext): bool
+    {
+        return $ext !== '' && in_array($ext, $this->excludedExts, true);
     }
      
 }
