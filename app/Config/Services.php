@@ -177,5 +177,21 @@ class Services extends BaseService
             service('lsxService')
         );
     }
+
+    public static function contentConfig(bool $getShared = true): \Config\Content
+    {
+        if ($getShared) {
+            return static::getSharedInstance('contentConfig');
+        }
+        return new \Config\Content();
+    }
+
+    public static function telemetry(bool $getShared = true): \App\Services\Telemetry
+    {
+        if ($getShared) {
+            return static::getSharedInstance('telemetry');
+        }
+        return new \App\Services\Telemetry();
+    }
 }
 ?>

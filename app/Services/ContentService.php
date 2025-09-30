@@ -53,6 +53,11 @@ class ContentService
             $content = $this->normalizeNewlines($content);
         }
 
+        $cfg = service('contentConfig');
+        if (strlen($bytes) > $cfg->maxWriteBytes) {
+            throw new \RuntimeException('File too large after write');
+        }
+
         $tmp = $abs . '.tmp';
         if (@file_put_contents($tmp, $content) === false) {
             throw new \RuntimeException("Failed to write temp file: {$tmp}");
@@ -147,17 +152,17 @@ class ContentService
         $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
         $kinds = service('mimeGuesser');
         $kind  = $kinds->kindFromExt($ext);
+        $cfg = service('contentConfig');
+        $tele = service('telemetry');
+        $tele->bump('content.open', ['kind' => $kind, 'ext' => $ext]);
+        // helper to cap raw inlined payloads in JSON
+        $includeRaw = function (string $bytes) use ($cfg): ?string {
+            return (strlen($bytes) <= $cfg->rawInclusionMaxBytes) ? $bytes : null;
+        };
         log_message('info', 'Open {kind} file {abs}', [
             'kind' => $kind,
             'abs'  => $abs,
         ]);
-
-        // Raw inclusion policy (only for text-like kinds, and capped)
-        $RAW_LIMIT = 256 * 1024; // 256 KiB default cap
-        $includeRaw = function (string $s) use ($RAW_LIMIT): string {
-            if (strlen($s) <= $RAW_LIMIT) return $s;
-            return substr($s, 0, $RAW_LIMIT); // soft cap; you can also add a meta flag
-        };
 
         $payload = null;
         $rawOut  = null;
@@ -194,6 +199,9 @@ class ContentService
 
             case 'lsx':
                 try {
+                    $ctx['abs']     = $abs;
+                    $ctx['relPath'] = $relPath ?? ($ctx['relPath'] ?? null);
+
                     $lsx     = service('lsxService')->parse($bytes, $ctx);
                     $payload = $lsx['payload'] ?? ['raw' => $bytes];
                     $meta    = $lsx['meta']    ?? [];

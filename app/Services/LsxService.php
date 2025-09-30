@@ -22,6 +22,36 @@ final class LsxService
      */
     public function parse(string $bytes, array $ctx = []): array
     {
+        $cfg  = service('contentConfig');
+        $tele = service('telemetry');
+        $tok  = $tele->start('lsx.parse');
+
+        $abs   = $ctx['abs']    ?? null;   // if you pass abs in ctx, great
+        $rel   = $ctx['relPath']?? null;
+        $stat  = null;
+        $key   = null;
+
+        // Build a stable cache key if we can fingerprint the file
+        if (is_string($abs) && $abs !== '' && @is_file($abs)) {
+            $stat = @stat($abs);
+            if ($stat) {
+                $key = 'lsx_' . md5($abs . '|' . ($stat['mtime'] ?? 0) . '|' . ($stat['size'] ?? strlen($bytes)));
+            }
+        }
+        if (!$key && $cfg->lsxCacheTtl > 0) {
+            // fallback: bytes + relPath if provided
+            $rel = (string)($ctx['relPath'] ?? '');
+            $key = 'lsx_' . md5($rel . '#' . strlen($bytes));
+        }
+
+        if ($cfg->lsxCacheTtl > 0 && $key) {
+            $cached = cache($key);
+            if (is_array($cached) && isset($cached['payload'], $cached['meta'])) {
+                $tele->end($tok, ['path' => $rel ?? $abs, 'cached' => true]);
+                return $cached;
+            }
+        }
+    
         $__t0 = hrtime(true);
         $region = $this->helper->detectRegionFromHead($bytes);
         $group  = $this->helper->regionGroupFromId($region);
@@ -65,6 +95,10 @@ final class LsxService
             'group'  => $meta['regionGroup'] ?? null,
             'ms'     => number_format($__ms, 3),
         ]);
+        if ($cfg->lsxCacheTtl > 0 && $key) {
+            cache()->save($key, ['payload' => $payload, 'meta' => $meta], $cfg->lsxCacheTtl);
+        }
+        $tele->end($tok, ['path' => $rel ?? $abs, 'cached' => false]);
 
         return ['payload' => $payload, 'meta' => $meta];
     }
