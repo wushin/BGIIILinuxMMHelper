@@ -288,6 +288,39 @@ class Mods extends BaseController
             $relPath = ltrim($relPath, '/');
             $abs     = service('pathResolver')->join($rootKey, $slug, $relPath ?: null);
 
+            $rules = [
+                'root'    => 'required|valid_root',
+                'slug'    => 'required|valid_slug',
+                'relPath' => 'required|valid_rel_path',
+            ];
+
+            $aliases = [
+                'valid_root'     => [\App\Validation\FileRules::class, 'validRoot'],
+                'valid_slug'     => [\App\Validation\FileRules::class, 'validSlug'],
+                'valid_rel_path' => [\App\Validation\FileRules::class, 'validRelPath'],
+            ];
+
+            // Inline validation (without formal Validation config file)
+            foreach ($rules as $field => $ruleString) {
+                $value = match ($field) {
+                    'root'    => $root,
+                    'slug'    => $slug,
+                    'relPath' => $relPath,
+                };
+                foreach (explode('|', $ruleString) as $rule) {
+                    if ($rule === 'required' && ($value === null || $value === '')) {
+                        throw new \InvalidArgumentException("Missing required field: {$field}");
+                    }
+                    if ($rule !== 'required') {
+                        [$class, $method] = $aliases[$rule];
+                        $ok = (new $class())->$method((string) $value);
+                        if (!$ok) {
+                            throw new \InvalidArgumentException("Invalid {$field}");
+                        }
+                    }
+                }
+            }
+
             $raw      = $this->request->getPost('data');       // optional raw text
             $dataJson = $this->request->getPost('data_json');  // optional JSON string
 

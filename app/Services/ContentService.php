@@ -58,6 +58,9 @@ class ContentService
             throw new \RuntimeException('File too large after write');
         }
 
+        if (strlen($bytes) > $cfg->maxWriteBytes) {
+            throw new \App\Exceptions\WriteDenied('File too large after write');
+        }
         $tmp = $abs . '.tmp';
         if (@file_put_contents($tmp, $content) === false) {
             throw new \RuntimeException("Failed to write temp file: {$tmp}");
@@ -72,6 +75,7 @@ class ContentService
             @unlink($tmp);
             throw new \RuntimeException("Atomic rename failed for: {$abs}");
         }
+        $tele->end($tok, ['abs' => $abs, 'ext' => $ext, 'kind' => $kind, 'bytes' => strlen($bytes)]);
     }
 
     /**
@@ -287,6 +291,10 @@ class ContentService
 
     public function save(string $abs, ?string $raw, ?string $json): array
     {
+        $cfg  = service('contentConfig');   // from Config\Content
+        $tele = service('telemetry');
+        $tok  = $tele->start('content.save');
+    
         // Normalize inputs
         $raw  = is_string($raw)  ? $raw  : null;
         $json = is_string($json) ? $json : null;
@@ -296,9 +304,51 @@ class ContentService
         $kinds = service('mimeGuesser');
         $kind  = $kinds->kindFromExt($ext);
 
-        // Decide what bytes to write
-        $bytesToWrite = null;
-        $warnings     = [];
+        // Decide write payload based on kind and inputs
+        switch ($kind) {
+            case 'image':
+            case 'binary':
+                if ($json !== null) {
+                    throw new \App\Exceptions\WriteDenied("JSON not allowed for {$kind} writes");
+                }
+                $bytes = (string) ($raw ?? '');
+                break;
+
+            case 'text':
+                // Normalize newlines (\r\n, \r -> \n)
+                $bytes = (string) ($raw ?? '');
+                if ($cfg->normalizeLF) {
+                    $bytes = str_replace(["\r\n", "\r"], "\n", $bytes);
+                }
+                break;
+
+            case 'xml':
+                $bytes = (string) ($raw ?? $json ?? '');
+                if ($cfg->normalizeLF) {
+                    $bytes = str_replace(["\r\n", "\r"], "\n", $bytes);
+                }
+                if ($cfg->prettyXml) {
+                    $dom = new \DOMDocument('1.0', 'UTF-8');
+                    $dom->preserveWhiteSpace = false;
+                    $dom->formatOutput = true;
+                    if (@$dom->loadXML($bytes)) {
+                        $bytes = $dom->saveXML();
+                    }
+                }
+                break;
+
+            case 'lsx':
+                $bytes = $parser->write($raw, $json, $abs);
+                break;
+
+            default:
+                // Unknown kind: raw only
+                if ($json !== null) {
+                    throw new \App\Exceptions\WriteDenied("JSON not allowed for unknown kind");
+                }
+                $bytes = (string) ($raw ?? '');
+                break;
+        }
 
         $parser = service('parserFactory')->forPath($abs);
 
