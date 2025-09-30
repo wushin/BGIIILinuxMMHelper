@@ -201,5 +201,13 @@ class Services extends BaseService
         }
         return new \App\Services\LsxNormalizer();
     }
+    public static function lsxConfig(bool $getShared = true): \Config\Lsx
+    {
+        if ($getShared) {
+            return static::getSharedInstance('lsxConfig');
+        }
+        return new \Config\Lsx();
+    }
+    
 }
 ?>

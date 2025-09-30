@@ -24,6 +24,7 @@ final class LsxService
     {
         $cfg  = service('contentConfig');
         $tele = service('telemetry');
+        $lsxCfg = service('lsxConfig');
         $tok  = $tele->start('lsx.parse');
 
         $abs   = $ctx['abs']    ?? null;   // if you pass abs in ctx, great
@@ -32,12 +33,45 @@ final class LsxService
         $key   = null;
 
         // Build a stable cache key if we can fingerprint the file
+        $locSig = '';           // signature of localization inputs (mtimes/sizes)
+        $xmlListForSig = [];    // only for meta/debug; not required
+
         if (is_string($abs) && $abs !== '' && @is_file($abs)) {
             $stat = @stat($abs);
-            if ($stat) {
-                $key = 'lsx_' . md5($abs . '|' . ($stat['mtime'] ?? 0) . '|' . ($stat['size'] ?? strlen($bytes)));
+
+            // If we know which mod we're in, hash its localization XMLs into the key
+            if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
+                $modAbs = $this->paths->join($ctx['rootKey'], $ctx['slug'], null);
+                if (@is_dir($modAbs)) {
+                    $scanner = new \App\Libraries\LocalizationScanner(
+                        $lsxCfg->restrictToLocalizationDir,
+                        $lsxCfg->validateLocalizationHead
+                    );
+
+                    // Either prefer a manifest selection (language-aware) or just take all XMLs for signature
+                    if ($lsxCfg->includeAllXmlInCacheKey) {
+                        $xmlListForSig = $scanner->findLocalizationXmlsForMod($modAbs);
+                    } else {
+                        $manifest = $scanner->scanMyModsManifest(null);
+                        $xmlListForSig = $manifest[$ctx['slug']]['xml_files'] ?? [];
+                    }
+
+                    if ($xmlListForSig) {
+                        $parts = [];
+                        foreach ($xmlListForSig as $p) {
+                            $st = @stat($p);
+                            $parts[] = $p . '|' . (($st['mtime'] ?? 0)) . '|' . (($st['size'] ?? 0));
+                        }
+                        $locSig = md5(implode(';', $parts));
+                    }
+                }
             }
+
+            $key = 'lsx_' . md5(
+                ($abs ?? '') . '|' . ($stat['mtime'] ?? 0) . '|' . ($stat['size'] ?? strlen($bytes)) . '|' . $locSig
+            );
         }
+
         if (!$key && $cfg->lsxCacheTtl > 0) {
             // fallback: bytes + relPath if provided
             $rel = (string)($ctx['relPath'] ?? '');
@@ -60,6 +94,7 @@ final class LsxService
             'region' => $region,
             'regionGroup'  => $group,
         ];
+        $lsxCfg = service('lsxConfig');
         $normalizer = service('lsxNormalizer');
         try {
             $payload = $normalizer->normalize($bytes);   // ← canonical JSON tree
@@ -71,16 +106,41 @@ final class LsxService
         $jsonTree = null;
 
         try {
-            $scanner   = new LocalizationScanner(true, false);
+            $scanner = new \App\Libraries\LocalizationScanner(
+                $lsxCfg->restrictToLocalizationDir,
+                $lsxCfg->validateLocalizationHead
+            );
 
-            // Build handle-map only when we know which mod we're in
             $handleMap = [];
+
+            // Only build a map when we know the mod folder
             if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
-                $modAbs    = $this->paths->join($ctx['rootKey'], $ctx['slug'], null);
-                $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
-                $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+                $modAbs = $this->paths->join($ctx['rootKey'], $ctx['slug'], null);
+
+                // Prefer a language-aware selection via manifest
+                $manifest = $scanner->scanMyModsManifest(null);
+                if (isset($manifest[$ctx['slug']])) {
+                    if ($lsxCfg->mergeAllLanguages) {
+                        // merge every XML for the mod
+                        $handleMap = $scanner->buildHandleMapForMod($manifest, $ctx['slug'], null, [], true);
+                    } else {
+                        // pick from preferredLanguages in order, or the default
+                        $handleMap = $scanner->buildHandleMapForMod(
+                            $manifest,
+                            $ctx['slug'],
+                            null,
+                            $lsxCfg->preferredLanguages,
+                            false
+                        );
+                    }
+                } else {
+                    // fallback: brute scan for XMLs in the mod folder
+                    $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
+                    $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+                }
             }
 
+            // Parse LSX with the handle map (injects attrs.text for TranslatedString handles)
             $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
         } catch (\Throwable $__) {
             // Fallback to generic XML→JSON if enrichment blows up
@@ -95,6 +155,7 @@ final class LsxService
         if (!is_array($payload)) {
             $payload = ['raw' => $bytes];
         }
+
         $__ms = (hrtime(true) - $__t0) / 1e6;
         log_message('info', 'LSX parse {path} region={region} group={group} ms={ms}', [
             'path'   => ($ctx['relPath'] ?? $ctx['abs'] ?? '(unknown)'),
