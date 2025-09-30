@@ -211,5 +211,35 @@ class PathResolver
         }
     }
 
+    /**
+     * Decompose an absolute path into {rootKey, slug, relPath}.
+     * Throws if the path is not contained in any configured root.
+     *
+     * @return array{rootKey:string, slug:string, relPath:string}
+     */
+    public function decompose(string $abs): array
+    {
+        $abs = $this->absPath($abs, mustExist: false);
+
+        foreach ($this->roots as $rootKey => $root) {
+            $baseReal = $this->absPath($root, mustExist: true);
+            if ($this->isContained($abs, $baseReal)) {
+                $rest = ltrim(substr($abs, strlen(rtrim($baseReal, DIRECTORY_SEPARATOR))), DIRECTORY_SEPARATOR);
+                if ($rest === '') {
+                    // path equals root dir; no slug/rel
+                    return ['rootKey' => $rootKey, 'slug' => '', 'relPath' => ''];
+                }
+                // first segment is slug; remainder (if any) is relPath
+                $parts   = explode(DIRECTORY_SEPARATOR, $rest, 3);
+                $slug    = $parts[0] ?? '';
+                // support {root}/{slug} and {root}/{slug}/{rel}
+                $relPath = $parts[2] ?? ($parts[1] ?? '');
+                return ['rootKey' => $rootKey, 'slug' => $slug, 'relPath' => $relPath];
+            }
+        }
+
+        throw new \RuntimeException("Path not within an allowed root: {$abs}");
+    }
+
 }
 ?>

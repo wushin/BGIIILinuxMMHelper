@@ -61,7 +61,7 @@ class DirectoryScanner
             return [];
         }
 
-        $cacheKey = $this->makeCacheKey('ds_top', [$rootKey]);
+        $cacheKey = $this->makeCacheKey('ds_top', [$rootKey, $this->verTop($rootKey)]);
         if ($this->useCache) {
             $cached = cache($cacheKey);
             if (is_array($cached)) {
@@ -158,8 +158,10 @@ class DirectoryScanner
         $cacheKey = $this->makeCacheKey('ds_tree', [
             $rootKey,
             $slug,
+            $this->verMod($rootKey, $slug),
             md5(json_encode([$depth, $hidden, $exts])),
         ]);
+
         if ($useCache) {
             $cached = cache($cacheKey);
             if (is_array($cached)) {
@@ -273,6 +275,35 @@ class DirectoryScanner
             'ext'   => strtolower(pathinfo($abs, PATHINFO_EXTENSION)),
             'rel'   => $rel,
         ];
+    }
+
+    private function sanitize(string $s): string
+    {
+        return trim(preg_replace('/[^A-Za-z0-9_-]+/', '_', $s), '_');
+    }
+
+    private function verTop(string $rootKey): string
+    {
+        $k = 'dsv_' . $this->sanitize($rootKey);
+        return (string) (cache($k) ?? '0');
+    }
+
+    private function verMod(string $rootKey, string $slug): string
+    {
+        $k = 'dsv_' . $this->sanitize($rootKey) . '_' . $this->sanitize($slug);
+        return (string) (cache($k) ?? '0');
+    }
+
+    /** Bump cache version for a whole root or a single mod */
+    public function bumpVersion(string $rootKey, ?string $slug = null): void
+    {
+        if ($slug === null || $slug === '') {
+            $k = 'dsv_' . $this->sanitize($rootKey);
+        } else {
+            $k = 'dsv_' . $this->sanitize($rootKey) . '_' . $this->sanitize($slug);
+        }
+        // microtime ensures new value each write; no TTL to keep "latest" pointer
+        cache()->save($k, (string) microtime(true), 0);
     }
 
     /** Build a CI4-safe cache key: only [A-Za-z0-9_-], joined by underscores. */

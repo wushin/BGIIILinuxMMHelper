@@ -310,6 +310,18 @@ class ContentService
         $bytesToWrite = $parser->write($raw, $json, $abs);
         // Write atomically-ish
         $bytesWritten = $this->write($abs, $bytesToWrite, true);
+        // Invalidate directory tree caches for this mod (root+slug)
+        try {
+            $parts = service('pathResolver')->decompose($abs);
+            if (!empty($parts['rootKey'])) {
+                service('directoryScanner')->bumpVersion($parts['rootKey'], $parts['slug'] ?? '');
+                // also bump root-level list (so new mods appear immediately)
+                service('directoryScanner')->bumpVersion($parts['rootKey'], null);
+            }
+        } catch (\Throwable $e) {
+            // non-fatal: failing to bump cache should not break writes
+            log_message('warning', 'cache bump failed: {msg}', ['msg' => $e->getMessage()]);
+        }
 
         return [
             'ok'            => true,
