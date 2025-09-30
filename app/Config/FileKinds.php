@@ -12,32 +12,29 @@ class FileKinds extends BaseConfig
     /** @var array<string, array{kind:string, mime:string}> */
     public array $map = [
         // text-like
-        'txt'  => ['kind' => 'txt',  'mime' => 'text/plain'],
-        'khn'  => ['kind' => 'khn',  'mime' => 'text/plain'],
-        'xml'  => ['kind' => 'xml',  'mime' => 'application/xml'],
-        'lsx'  => ['kind' => 'lsx',  'mime' => 'application/xml'],
+        'txt' => ['kind' => 'text', 'mime' => 'text/plain'],
+        'khn' => ['kind' => 'text', 'mime' => 'text/plain'],
+
+        // xml family
+        'xml' => ['kind' => 'xml',  'mime' => 'application/xml'],
+        'lsx' => ['kind' => 'lsx',  'mime' => 'application/xml'],
 
         // images
-        'png'  => ['kind' => 'image','mime' => 'image/png'],
-        'jpg'  => ['kind' => 'image','mime' => 'image/jpeg'],
-        'jpeg' => ['kind' => 'image','mime' => 'image/jpeg'],
-        'gif'  => ['kind' => 'image','mime' => 'image/gif'],
-        'webp' => ['kind' => 'image','mime' => 'image/webp'],
-        'dds'  => ['kind' => 'image','mime' => 'application/octet-stream'],
+        'png' => ['kind' => 'image','mime' => 'image/png'],
+        'dds' => ['kind' => 'image','mime' => 'application/octet-stream'],
 
-        // fallback
-        '*'    => ['kind' => 'unknown', 'mime' => 'application/octet-stream'],
+        '*'   => ['kind' => 'unknown', 'mime' => 'application/octet-stream'],
     ];
 
     public function kindOf(string $ext): string
     {
-        $ext = strtolower($ext);
+        $ext = strtolower(ltrim($ext, '.'));
         return $this->map[$ext]['kind'] ?? $this->map['*']['kind'];
     }
 
     public function mimeOf(string $ext): string
     {
-        $ext = strtolower($ext);
+        $ext = strtolower(ltrim($ext, '.'));
         return $this->map[$ext]['mime'] ?? $this->map['*']['mime'];
     }
 }
