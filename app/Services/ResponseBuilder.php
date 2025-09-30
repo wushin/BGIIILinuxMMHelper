@@ -11,10 +11,16 @@ class ResponseBuilder
     public function wantsJson(RequestInterface $req): bool
     {
         $fmt = strtolower((string) $req->getGet('format'));
-        if ($fmt === 'html') return false;   // allow ?format=html for testing
-        if ($fmt === 'json') return true;    // allow ?format=json to force JSON
-        $accept = (string) ($req->getHeaderLine('Accept') ?? '');
-        return str_contains($accept, 'application/json');
+        if ($fmt === 'html') return false;
+        if ($fmt === 'json') return true;
+
+        // XHR hint
+        if (strtolower($req->getHeaderLine('X-Requested-With')) === 'xmlhttprequest') {
+            return true;
+        }
+
+        $accept = strtolower((string) $req->getHeaderLine('Accept'));
+        return strpos($accept, 'application/json') !== false;
     }
 
     public function ok(
@@ -26,9 +32,9 @@ class ResponseBuilder
         int $status = 200
     ): ResponseInterface {
         if ($this->wantsJson($req)) {
-            return $res->setStatusCode($status)->setJSON($json);
+            return $res->setStatusCode($status)->setContentType('application/json')->setJSON($json);
         }
-        return $res->setStatusCode($status)->setBody(view($view, $viewData));
+        return $res->setStatusCode($status)->setContentType('text/html', 'utf-8')->setBody(view($view, $viewData));
     }
 
     public function notFound(

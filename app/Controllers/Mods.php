@@ -43,6 +43,8 @@ class Mods extends BaseController
     public function list(): ResponseInterface
     {
         $paths = service('pathResolver');
+        $scan  = service('directoryScanner');
+        $rb    = service('responseBuilder');
 
         $rootsAbs = [
             'MyMods'       => $paths->myMods(),
@@ -53,20 +55,22 @@ class Mods extends BaseController
         $summary = [];
         foreach ($rootsAbs as $key => $abs) {
             $summary[$key] = [
-                'configured' => service('directoryScanner')->isRootConfigured($key),
+                'configured' => $scan->isRootConfigured($key),
                 'path'       => $abs ?: null,
-                'count'      => service('directoryScanner')->countTopLevel($key),
+                'count'      => $scan->countTopLevel($key),
             ];
         }
 
-        if ($this->wantsJson()) {
-            return $this->response->setJSON(['ok' => true, 'roots' => $summary]);
-        }
-
-        return $this->response->setBody(view('mods/roots', [
-            'pageTitle' => 'BG3LinuxHelper',
-            'roots'     => $summary,
-        ]));
+        return $rb->ok(
+            $this->response,
+            $this->request,
+            ['ok' => true, 'roots' => $summary], // JSON payload
+            'mods/roots',                         // view
+            [
+                'pageTitle' => 'BG3LinuxHelper',
+                'roots'     => $summary,
+            ]
+        );
     }
 
     // GET /mods/{Root} → (MyMods uses browse layout)
