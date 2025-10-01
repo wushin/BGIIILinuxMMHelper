@@ -232,6 +232,12 @@ class Services extends BaseService
         if ($getShared) return static::getSharedInstance('statsTreasureParser');
         return new \App\Services\Parsers\StatsTreasureParser();
     }
+
+    public static function textHandleResolver(bool $getShared = true): \App\Services\TextHandleResolver
+    {
+        if ($getShared) return static::getSharedInstance('textHandleResolver');
+        return new \App\Services\TextHandleResolver();
+    }
     
 }
 ?>

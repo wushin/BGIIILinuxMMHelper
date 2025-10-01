@@ -1,5 +1,6 @@
 <?php
 namespace App\Services\Parsers;
+use App\Services\Parsers\ParserInterface;
 
 final class TxtParser implements ParserInterface
 {

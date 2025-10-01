@@ -1,7 +1,7 @@
 <?php
 namespace App\Services\Parsers;
 
-use App\Services\ParserInterface;
+use App\Services\Parsers\ParserInterface;
 
 final class StatsTreasureParser implements ParserInterface
 {

@@ -14,16 +14,18 @@ final class ParserFactory
     public function forPath(string $absPath): ParserInterface
     {
         $kind = $this->mime->kindFromPath($absPath);
+        log_message('info', 'TextPeek subtype {kind} ', ['kind' => $kind]);
 
         if ($kind === 'text') {
             $sub = service('textPeek')->classify($absPath);
+            log_message('info', 'TextPeek subtype {sub} for {abs}', ['sub' => $sub, 'abs' => $absPath]);
 
             return match ($sub) {
                 'txt.goal'             => new GoalsParser(),
                 'txt.stats.equipment'  => new StatsEquipmentParser(),
                 'txt.stats.treasure'   => new StatsTreasureParser(),
-                'txt.stats.generic'    => new StatsParser(),      // your existing generic stats parser (with handle resolution)
-                default                => new TxtParser(),        // plain text fallback
+                'txt.stats.generic'    => new StatsParser(),
+                default                => new TxtParser(),
             };
         }
 

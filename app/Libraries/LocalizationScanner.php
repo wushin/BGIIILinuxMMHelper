@@ -220,10 +220,26 @@ class LocalizationScanner
         $map = [];
         $contents = $sx->xpath("//content");
         if ($contents) {
+            $latestVer = []; // track highest version per base
+
             foreach ($contents as $c) {
                 $uid  = (string)($c['contentuid'] ?? '');
                 $text = trim((string)$c);
-                if ($uid !== '') $map[$uid] = $text;
+                if ($uid === '') continue;
+
+                // Always exact key (may include ;N)
+                $map[$uid] = $text;
+
+                // If versioned, also maintain unversioned "latest" alias
+                if (preg_match('~^(h[0-9a-z]+);(\d+)~i', $uid, $m)) {
+                    $base = $m[1];
+                    $ver  = (int) $m[2];
+                    $prev = $latestVer[$base] ?? -1;
+                    if ($ver >= $prev) {
+                        $map[$base]       = $text;   // latest (no ;N)
+                        $latestVer[$base] = $ver;
+                    }
+                }
             }
         }
         return $map;

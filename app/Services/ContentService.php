@@ -11,6 +11,7 @@ use App\Libraries\LsxHelper;
 use App\Helpers\TextParserHelper;
 use App\Helpers\XmlHelper;
 use App\Services\Parsers\ParserFactory;
+use App\Exceptions\WriteDenied;
 
 /**
  * ContentService centralizes safe file reading/writing and basic directory listing.
@@ -177,15 +178,34 @@ class ContentService
         $isTextLike      = in_array($ext, $isTextLikeExts, true) || in_array($kind, ['txt','khn','unknown'], true);
 
         // ------------- kind switch -------------
-        switch ($kind) {
+        switch ($ext) {
             case 'txt':
+                try {
+                    // Pass context for localization-aware parsers
+                    $GLOBALS['__ctx_root']    = $ctx['rootKey'] ?? null;
+                    $GLOBALS['__ctx_slug']    = $ctx['slug']    ?? null;
+                    $GLOBALS['__ctx_relPath'] = $ctx['relPath'] ?? null;
+
+                    // Use ParserFactory so TextPeek can classify and pick the right parser
+                    $parser  = service('parserFactory')->forPath($abs);
+                    $result  = $parser->read($bytes, $abs);
+                    $payload = $result['json'] ?? ['raw' => $bytes];
+                    $meta    = array_merge($meta, $result['meta'] ?? []);
+                } catch (\Throwable $e) {
+                    log_message('error', 'TXT parse failed: {msg}', ['msg' => $e->getMessage()]);
+                }
+                $rawOut = $includeRaw($bytes);
+                break;            
+
+            case 'anc':
+            case 'ann':
             case 'khn':
                 try {
                     $json = \App\Helpers\TextParserHelper::txtToJson($bytes, true);
                     $arr  = json_decode($json, true);
                     $payload = is_array($arr) ? $arr : ['raw' => $bytes];
                 } catch (\Throwable $__) {
-                    $payload = ['raw' => $bytes];
+                    log_message('error', '{ext} parse failed: {msg}', ['ext' => $ext, 'msg' => $e->getMessage()]);
                 }
                 $rawOut = $includeRaw($bytes);
                 break;
@@ -195,8 +215,8 @@ class ContentService
                     $json = \App\Helpers\XmlHelper::createJson($bytes, true);
                     $arr  = json_decode($json, true);
                     $payload = is_array($arr) ? $arr : ['raw' => $bytes];
-                } catch (\Throwable $__) {
-                    $payload = ['raw' => $bytes];
+                } catch (\Throwable $e) {
+                    log_message('error', 'XML parse failed: {msg}', ['msg' => $e->getMessage()]);
                 }
                 $rawOut = $includeRaw($bytes);
                 break;
@@ -289,97 +309,92 @@ class ContentService
         return [null, null];
     }
 
-    public function save(string $abs, ?string $raw, ?string $json): array
+    public function save(string $abs, ?string $raw = null, ?string $json = null): array
     {
-        $cfg  = service('contentConfig');   // from Config\Content
-        $tele = service('telemetry');
-        $tok  = $tele->start('content.save');
-    
-        // Normalize inputs
-        $raw  = is_string($raw)  ? $raw  : null;
-        $json = is_string($json) ? $json : null;
+        if ($raw === null && $json === null) {
+            throw new WriteDenied('Nothing to save: both $raw and $json are null.');
+        }
 
-        // Figure out ext/kind
-        $ext   = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-        $kinds = service('mimeGuesser');
-        $kind  = $kinds->kindFromExt($ext);
+        /** @var ParserFactory $factory */
+        $factory = service('parserFactory');
+        $parser  = $factory->forPath($abs);
 
-        // Decide write payload based on kind and inputs
+        $kind = service('mimeGuesser')->kindFromPath($abs);
+
         switch ($kind) {
             case 'image':
             case 'binary':
+            case 'unknown':
                 if ($json !== null) {
-                    throw new \App\Exceptions\WriteDenied("JSON not allowed for {$kind} writes");
-                }
-                $bytes = (string) ($raw ?? '');
-                break;
-
-            case 'text':
-                // Normalize newlines (\r\n, \r -> \n)
-                $bytes = (string) ($raw ?? '');
-                if ($cfg->normalizeLF) {
-                    $bytes = str_replace(["\r\n", "\r"], "\n", $bytes);
+                    throw new WriteDenied(sprintf(
+                        'JSON save is not allowed for kind "%s" (%s).',
+                        $kind,
+                        basename($abs)
+                    ));
                 }
                 break;
 
             case 'xml':
-                $bytes = (string) ($raw ?? $json ?? '');
-                if ($cfg->normalizeLF) {
-                    $bytes = str_replace(["\r\n", "\r"], "\n", $bytes);
-                }
-                if ($cfg->prettyXml) {
-                    $dom = new \DOMDocument('1.0', 'UTF-8');
-                    $dom->preserveWhiteSpace = false;
-                    $dom->formatOutput = true;
-                    if (@$dom->loadXML($bytes)) {
-                        $bytes = $dom->saveXML();
-                    }
-                }
-                break;
-
             case 'lsx':
-                $bytes = $parser->write($raw, $json, $abs);
+            case 'text':
                 break;
 
             default:
-                // Unknown kind: raw only
                 if ($json !== null) {
-                    throw new \App\Exceptions\WriteDenied("JSON not allowed for unknown kind");
+                    throw new WriteDenied(sprintf(
+                        'JSON save is not allowed for kind "%s" (%s).',
+                        $kind,
+                        basename($abs)
+                    ));
                 }
-                $bytes = (string) ($raw ?? '');
                 break;
         }
 
-        $parser = service('parserFactory')->forPath($abs);
+        $bytes = $parser->write($raw, $json, $abs);
 
-        // Delegate to parser: enforce policy first
-        if (in_array($kind, ['image', 'unknown'], true) && $json !== null) {
-            throw new \RuntimeException('JSON writes not allowed for this file type.');
+        if (!is_string($bytes)) {
+            throw new WriteDenied('Parser did not return a string of bytes.');
         }
 
-        $bytesToWrite = $parser->write($raw, $json, $abs);
-        // Write atomically-ish
-        $bytesWritten = $this->write($abs, $bytesToWrite, true);
-        // Invalidate directory tree caches for this mod (root+slug)
-        try {
-            $parts = service('pathResolver')->decompose($abs);
-            if (!empty($parts['rootKey'])) {
-                service('directoryScanner')->bumpVersion($parts['rootKey'], $parts['slug'] ?? '');
-                // also bump root-level list (so new mods appear immediately)
-                service('directoryScanner')->bumpVersion($parts['rootKey'], null);
-            }
-        } catch (\Throwable $e) {
-            // non-fatal: failing to bump cache should not break writes
-            log_message('warning', 'cache bump failed: {msg}', ['msg' => $e->getMessage()]);
+        $dir = dirname($abs);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            throw new WriteDenied('Directory is not writable: ' . $dir);
         }
+
+        $tmp = tempnam($dir, '.save.');
+        if ($tmp === false) {
+            throw new WriteDenied('Failed creating a temporary file in: ' . $dir);
+        }
+
+        $written = @file_put_contents($tmp, $bytes);
+        if ($written === false) {
+            @unlink($tmp);
+            throw new WriteDenied('Failed writing to temporary file for: ' . $abs);
+        }
+
+        $origMode = null;
+        if (file_exists($abs)) {
+            $origMode = @fileperms($abs) & 0777;
+        }
+
+        if (!@rename($tmp, $abs)) {
+            @unlink($tmp);
+            throw new WriteDenied('Failed replacing file: ' . $abs);
+        }
+
+        if ($origMode !== null) {
+            @chmod($abs, $origMode);
+        }
+
+        clearstatcache(true, $abs);
 
         return [
-            'ok'            => true,
-            'path'          => $abs,
-            'ext'           => $ext,
-            'kind'          => $kind,
-            'bytesWritten'  => $bytesWritten,
-            'warnings'      => $warnings,
+            'ok'      => true,
+            'path'    => $abs,
+            'kind'    => $kind,
+            'size'    => filesize($abs),
+            'mtime'   => filemtime($abs),
+            'written' => $written,
         ];
     }
 
