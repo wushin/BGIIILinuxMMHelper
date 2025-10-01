@@ -30,5 +30,14 @@ class Lsx extends BaseConfig
      * Safer: cache invalidates if ANY localization file changes.
      */
     public bool $includeAllXmlInCacheKey = true;
+
+    /** pretty print XML output */
+    public bool $prettyXml   = true;
+
+    /** normalize newlines to \n on write */
+    public bool $normalizeLF = true;
+
+    /** emit XML declaration (<?xml ...?>) */
+    public bool $emitDecl    = true;    
 }
 ?>
