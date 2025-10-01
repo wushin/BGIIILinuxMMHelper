@@ -208,6 +208,30 @@ class Services extends BaseService
         }
         return new \Config\Lsx();
     }
+
+    public static function textPeek(bool $getShared = true): \App\Services\TextPeek
+    {
+        if ($getShared) return static::getSharedInstance('textPeek');
+        return new \App\Services\TextPeek();
+    }
+
+    public static function goalsParser(bool $getShared = true): \App\Services\Parsers\GoalsParser
+    {
+        if ($getShared) return static::getSharedInstance('goalsParser');
+        return new \App\Services\Parsers\GoalsParser();
+    }
+    
+    public static function statsEquipmentParser(bool $getShared = true): \App\Services\Parsers\StatsEquipmentParser
+    {
+        if ($getShared) return static::getSharedInstance('statsEquipmentParser');
+        return new \App\Services\Parsers\StatsEquipmentParser();
+    }
+
+    public static function statsTreasureParser(bool $getShared = true): \App\Services\Parsers\StatsTreasureParser
+    {
+        if ($getShared) return static::getSharedInstance('statsTreasureParser');
+        return new \App\Services\Parsers\StatsTreasureParser();
+    }
     
 }
 ?>

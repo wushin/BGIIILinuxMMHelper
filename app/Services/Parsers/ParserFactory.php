@@ -15,12 +15,24 @@ final class ParserFactory
     {
         $kind = $this->mime->kindFromPath($absPath);
 
+        if ($kind === 'text') {
+            $sub = service('textPeek')->classify($absPath);
+
+            return match ($sub) {
+                'txt.goal'             => new GoalsParser(),
+                'txt.stats.equipment'  => new StatsEquipmentParser(),
+                'txt.stats.treasure'   => new StatsTreasureParser(),
+                'txt.stats.generic'    => new StatsParser(),      // your existing generic stats parser (with handle resolution)
+                default                => new TxtParser(),        // plain text fallback
+            };
+        }
+
         return match ($kind) {
-            'text' => new TxtParser(),
             'xml'  => new XmlParser(),
             'lsx'  => new LsxParser($this->lsx),
             default => new PassthroughParser(),
         };
     }
+
 }
 ?>
