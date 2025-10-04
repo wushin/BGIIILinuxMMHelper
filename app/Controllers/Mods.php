@@ -263,6 +263,7 @@ class Mods extends BaseController
                 'raw'         => $rawOut,
                 'region'      => $meta['region']      ?? null,
                 'regionGroup' => $meta['regionGroup'] ?? null,
+                'meta'        => $meta,
                 'selection'   => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
             ],
             'mods/file',

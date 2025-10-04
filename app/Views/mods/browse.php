@@ -258,58 +258,76 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   }
 
   async function openRel(rel) {
-    try {
-      view.innerHTML = `<div class="muted">Loading…</div>`;
+  try {
+    view.innerHTML = `<div class="muted">Loading…</div>`;
 
-      const r = await fetch(relToUrl(rel), { headers: { 'Accept': 'application/json' }});
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data   = await r.json();
+    const r = await fetch(relToUrl(rel), { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
 
-      meta.innerHTML = badgeBar(data);
-      // persist again on successful load
-      persistSelection(rel); saveLocal(rel);
-      setUrlSelection(rel);      
+    meta.innerHTML = badgeBar(data);
 
-      const kind = (data.kind ?? result?.kind ?? 'unknown').toLowerCase();
-      const ext  = (data.ext  ?? result?.ext  ?? '').toLowerCase();
+    persistSelection(rel); 
+    saveLocal(rel);
+    setUrlSelection(rel);
 
-      const result = data.result ?? data.payload ?? data.data ?? {};
-      const raw = typeof data.raw === 'string' ? data.raw : (result && typeof result.raw === 'string' ? result.raw : '');
+    const result = data.result ?? data.payload ?? data.data ?? {};
+    const kind = (data.kind ?? result.kind ?? 'unknown').toLowerCase();
+    const ext  = (data.ext  ?? result.ext  ?? '').toLowerCase();
+    const metaObj = (data.meta ?? result.meta ?? {});
+    const regionGroup = (metaObj.regionGroup ?? '').toLowerCase();
+    const dlg = metaObj.dialog ?? null;
 
-      const textLikeExts  = ['txt','khn','anc','ann','cln','clc'];
-      const textLikeKinds = ['txt','khn']; // keep xml/lsx rendered as JSON by default
-      const isTextLike    = textLikeExts.includes(ext) || textLikeKinds.includes((kind || '').toLowerCase());
-      
+    const raw = (typeof data.raw === 'string')
+      ? data.raw
+      : (typeof result.raw === 'string' ? result.raw : '');
 
-      if (kind === 'image') {
-        if (result.dataUri) {
-          view.innerHTML = `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
-        } else if (ext === 'dds') {
-          view.innerHTML = `<div class="muted">DDS preview unavailable (no Imagick DDS delegate).</div>`;
-        } else {
-          view.innerHTML = `<div class="muted">No preview.</div>`;
-        }
-        return;
-      }
-      if (isTextLike && raw) {
-        view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
-        return;
-      }
+    const textLikeExts  = ['txt','khn','anc','ann','cln','clc'];
+    const textLikeKinds = ['txt','khn'];
+    const isTextLike    = textLikeExts.includes(ext) || textLikeKinds.includes(kind);
 
-      if (['xml','lsx'].includes((kind || '').toLowerCase())) {
-        view.innerHTML = renderJson(result || data);
-        return;
-      }
-
-      if (raw) {
-        view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
-      } else {
-        view.innerHTML = renderJson(result || data);
-     }
-    } catch (err) {
-      view.innerHTML = `<div class="flash-red">Failed to load: ${esc(err.message||String(err))}</div>`;
+    if (kind === 'lsx' && regionGroup === 'dialog' && dlg) {
+      meta.innerHTML = badgeBar(data) + renderDialogTags(dlg);
+      view.innerHTML = renderDialogNodes(dlg, metaObj);
+      document.getElementById('dlg-expand-all')?.addEventListener('click', () => {
+        document.querySelectorAll('.dlg-node').forEach(n => n.classList.remove('collapsed'));
+      });
+      document.getElementById('dlg-collapse-all')?.addEventListener('click', () => {
+        document.querySelectorAll('.dlg-node').forEach(n => n.classList.add('collapsed'));
+      });
+      return;
     }
+
+    if (kind === 'image') {
+      if (result.dataUri) {
+        view.innerHTML = `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
+      } else if (ext === 'dds') {
+        view.innerHTML = `<div class="muted">DDS preview unavailable (no Imagick DDS delegate).</div>`;
+      } else {
+        view.innerHTML = `<div class="muted">No preview.</div>`;
+      }
+      return;
+    }
+
+    if (isTextLike && raw) {
+      view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
+      return;
+    }
+
+    if (kind === 'xml' || kind === 'lsx') {
+      view.innerHTML = renderJson(result || data);
+      return;
+    }
+
+    if (raw) {
+      view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
+    } else {
+      view.innerHTML = renderJson(result || data);
+    }
+  } catch (err) {
+    view.innerHTML = `<div class="flash-red">Failed to load: ${esc(err.message || String(err))}</div>`;
   }
+}
 
   // expose openRel if other code uses it
   window.openRel = openRel;
@@ -487,6 +505,147 @@ tree.addEventListener('click', (e) => {
     });
   }
 })();
+
+
+function resolveDialogLineText(tt, meta) {
+  if (tt && typeof tt.text === 'string' && tt.text.trim()) {
+    return esc(tt.text);
+  }
+  const handles = meta?.localization?.handles || {};
+  if (tt?.handle && handles[tt.handle]?.text) {
+    return esc(handles[tt.handle].text);
+  }
+  if (tt?.handle) return `<span class="muted">[${esc(tt.handle)}]</span>`;
+  return `<span class="muted">(no text)</span>`;
+}
+function renderDialogTags(dlg) {
+  const esc = (s)=>String(s??'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  const cat = esc(dlg.category || '');
+  const duu = esc(dlg.dialogUuid || '');
+  const tid = esc(dlg.timelineId || '');
+
+  const chips = (dlg.speakers?.list || [])
+    .map(s => `<span class="chip">#${s.index}${s.mappingId ? ' ('+esc(s.mappingId)+')' : ''}</span>`).join(' ')
+    + ` <span class="chip chip-narrator">Narrator</span>`;
+
+  const rows = (dlg.speakers?.addressed || []).map(r => {
+    const to = r.toIndex === -666 ? 'Narrator' : (r.toIndex === -1 ? 'none' : `#${r.toIndex}`);
+    return `<tr><td>#${r.fromIndex}</td><td>${to}</td></tr>`;
+  }).join('');
+
+  const p = dlg.problems || {};
+  const pills = [
+    (p.edges?.orphans || []).length ? `<span class="pill err">Orphan links: ${(p.edges.orphans || []).length}</span>` : '',
+    (p.constructors?.unknown || []).length ? `<span class="pill err">Unknown ctors: ${(p.constructors.unknown || []).length}</span>` : '',
+    (p.speakers?.unmapped || []).length ? `<span class="pill warn">Unmapped speakers: ${(p.speakers.unmapped || []).length}</span>` : '',
+    (p.flags?.invalidParamIndex || []).length ? `<span class="pill warn">Flags invalid: ${(p.flags.invalidParamIndex || []).length}</span>` : '',
+  ].join('');
+
+  return `
+    <section class="dlg-tags card">
+      <h3 class="dlg-h3">Dialog</h3>
+      <div class="dlg-row"><span class="dlg-label">Category</span><span class="dlg-val">${cat}</span></div>
+      <div class="dlg-row"><span class="dlg-label">Dialog UUID</span><span class="dlg-val mono">${duu}</span></div>
+      <div class="dlg-row"><span class="dlg-label">TimelineID</span><span class="dlg-val mono">${tid}</span></div>
+      <h4 class="dlg-h4">Speakers</h4>
+      <div class="dlg-chiprow">${chips}</div>
+      <h5 class="dlg-h5">Default Addressed</h5>
+      <table class="dlg-table">
+        <thead><tr><th>From</th><th>To</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="dlg-problems">${pills}</div>
+    </section>`;
+}
+
+function renderDialogNodes(dlg) {
+  const esc = (s)=>String(s??'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  const order = dlg.roots?.ordered || [];
+  const nodes = Object.assign({}, dlg.nodes || {});
+  const seen = new Set();
+  const seq  = [];
+  for (const u of order) if (nodes[u]) { seq.push([u, nodes[u]]); seen.add(u); }
+  for (const u in nodes) if (!seen.has(u)) seq.push([u, nodes[u]]);
+
+  const spMap = new Map((dlg.speakers?.list || []).map(s => [s.index, s.mappingId || '']));
+
+  const flagList = (arr, title) => {
+    if (!arr || !arr.length) return '';
+    const lis = arr.map(f => {
+      const t = f.target || {};
+      const tgt = t.kind === 'narrator' ? 'Narrator'
+                : t.kind === 'none'     ? 'none'
+                : t.kind === 'speaker'  ? `#${t.index} (${esc(t.mappingId || '')})`
+                : t.kind === 'invalid'  ? `<span class="warn">invalid (#${t.index})</span>` : '';
+      return `<li class="flag-li">
+        <code>type=${esc(f.type)}</code>
+        <code>UUID=${esc(f.UUID)}</code>
+        <code>value=${f.value ? 'true' : 'false'}</code>
+        <code>paramval=${(f.paramval|0)}</code>
+        <span class="flag-target">→ ${tgt}</span>
+      </li>`;
+    }).join('');
+    return `<div class="flag-group"><div class="flag-title">${title}</div><ul>${lis}</ul></div>`;
+  };
+
+  const cards = seq.map(([uuid, n]) => {
+    const ctor = n.constructor || '';
+    const isRoot = !!n.isRoot;
+    const isEnd  = !!n.isEnd;
+    const spk    = n.speakerIndex;
+
+    let speaker = '—';
+    if (spk === -666) speaker = 'Narrator';
+    else if (spk === -1 || spk === null || spk === undefined) speaker = '—';
+    else if (spMap.has(spk)) speaker = `#${spk} (${esc(spMap.get(spk))})`;
+    else speaker = `<span class="warn">#${spk} (not in speakerlist)</span>`;
+
+    const texts = (n.texts || []).map(t => {
+      if (t.text)   return `<div class="line"><div class="line-text">${esc(t.text)}</div></div>`;
+      if (t.handle) return `<div class="line"><div class="line-handle mono">${esc(t.handle)}</div></div>`;
+      if (t.lineId) return `<div class="line"><div class="line-missing">Missing text (LineId ${esc(t.lineId)})</div></div>`;
+      return '';
+    }).join('');
+
+    const children = (n.children || []).map(c => {
+      if (c.type === 'local')  return `<li><a href="#node-${esc(c.uuid)}" class="link-local">${esc(c.uuid)}</a></li>`;
+      if (c.type === 'nested') return `<li><span class="link-nested" data-target-uuid="${esc(c.uuid)}">Nested → ${esc(c.uuid)}</span></li>`;
+      return `<li><span class="link-orphan">Orphan → ${esc(c.uuid)}</span></li>`;
+    }).join('');
+
+    const checks = flagList(n.flags?.checks, 'checkflags');
+    const sets   = flagList(n.flags?.sets,   'setflags');
+
+    return `
+      <article class="dlg-node${isRoot ? ' root' : ''}" id="node-${esc(uuid)}">
+        <header class="dlg-node-hd">
+          ${isRoot ? '<span class="badge root">Root</span>' : ''}
+          ${isEnd  ? '<span class="badge end">End</span>'  : ''}
+          ${String(ctor).toLowerCase()==='nested' ? '<span class="badge nested">Nested</span>' : ''}
+          ${ctor ? `<span class="badge ctor">${esc(ctor)}</span>` : ''}
+          <a class="uuid mono" href="#node-${esc(uuid)}">${esc(String(uuid).slice(0,8))}…</a>
+          <button class="btn btn-xxs toggle">Toggle</button>
+        </header>
+        <section class="dlg-node-body">
+          <div class="kv"><span class="k">Speaker</span><span class="v">${speaker}</span></div>
+          ${texts ? `<div class="texts">${texts}</div>` : ''}
+          <div class="children">
+            <span class="k">Children</span>
+            <ul>${children}</ul>
+            ${isEnd ? `<div class="endnote">Stops here.</div>` : ''}
+          </div>
+          ${checks}${sets}
+        </section>
+      </article>`;
+  }).join('');
+
+  return `
+    <div class="dlg-controls">
+      <button class="btn btn-sm" id="dlg-expand-all">Expand all</button>
+      <button class="btn btn-sm" id="dlg-collapse-all">Collapse all</button>
+    </div>
+    <div class="dlg-nodes">${cards}</div>`;
+}
+
 </script>
 <?= $this->endSection() ?>
-

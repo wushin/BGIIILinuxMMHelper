@@ -226,7 +226,7 @@ class ContentService
                     $ctx['abs']     = $abs;
                     $ctx['relPath'] = $relPath ?? ($ctx['relPath'] ?? null);
 
-                    $lsx     = service('lsxService')->parse($bytes, $ctx);
+                    $lsx     = service('lsxService')->read($abs, $ctx);
                     $payload = $lsx['payload'] ?? ['raw' => $bytes];
                     $meta    = $lsx['meta']    ?? [];
                 } catch (\Throwable $e) {

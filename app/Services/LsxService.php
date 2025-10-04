@@ -1,174 +1,217 @@
 <?php
+declare(strict_types=1);
 
 namespace App\Services;
 
 use App\Libraries\LocalizationScanner;
 use App\Libraries\LsxHelper;
+use App\Services\Dialog\DialogSummarizer;
 
 final class LsxService
 {
     public function __construct(
         private readonly PathResolver $paths,
-        private ?\App\Libraries\LsxHelper $helper = null
+        private ?LsxHelper $helper = null
     ) {
         $this->helper ??= service('lsxHelper');
     }
 
-    /**
-     * Parse LSX bytes with optional enrichment (region/group + handle-map).
-     * @param string $bytes  LSX file content
-     * @param array  $ctx    ['rootKey' => 'MyMods', 'slug' => '...', 'relPath' => '...'] (optional)
-     * @return array { payload: array, meta: array }
-     */
-    public function parse(string $bytes, array $ctx = []): array
+    /** Cheap peek for region & group. */
+    public function peek(string $abs): array
     {
-        $cfg  = service('contentConfig');
-        $tele = service('telemetry');
-        $lsxCfg = service('lsxConfig');
-        $tok  = $tele->start('lsx.parse');
-
-        $abs   = $ctx['abs']    ?? null;   // if you pass abs in ctx, great
-        $rel   = $ctx['relPath']?? null;
-        $stat  = null;
-        $key   = null;
-
-        // Build a stable cache key if we can fingerprint the file
-        $locSig = '';           // signature of localization inputs (mtimes/sizes)
-        $xmlListForSig = [];    // only for meta/debug; not required
-
-        if (is_string($abs) && $abs !== '' && @is_file($abs)) {
-            $stat = @stat($abs);
-
-            // If we know which mod we're in, hash its localization XMLs into the key
-            if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
-                $modAbs = $this->paths->join($ctx['rootKey'], $ctx['slug'], null);
-                if (@is_dir($modAbs)) {
-                    $scanner = new \App\Libraries\LocalizationScanner(
-                        $lsxCfg->restrictToLocalizationDir,
-                        $lsxCfg->validateLocalizationHead
-                    );
-
-                    // Either prefer a manifest selection (language-aware) or just take all XMLs for signature
-                    if ($lsxCfg->includeAllXmlInCacheKey) {
-                        $xmlListForSig = $scanner->findLocalizationXmlsForMod($modAbs);
-                    } else {
-                        $manifest = $scanner->scanMyModsManifest(null);
-                        $xmlListForSig = $manifest[$ctx['slug']]['xml_files'] ?? [];
-                    }
-
-                    if ($xmlListForSig) {
-                        $parts = [];
-                        foreach ($xmlListForSig as $p) {
-                            $st = @stat($p);
-                            $parts[] = $p . '|' . (($st['mtime'] ?? 0)) . '|' . (($st['size'] ?? 0));
-                        }
-                        $locSig = md5(implode(';', $parts));
-                    }
-                }
-            }
-
-            $key = 'lsx_' . md5(
-                ($abs ?? '') . '|' . ($stat['mtime'] ?? 0) . '|' . ($stat['size'] ?? strlen($bytes)) . '|' . $locSig
-            );
+        if ($this->helper && method_exists($this->helper, 'peek')) {
+            $res = $this->helper->peek($abs);
+            return [
+                'region'      => $res['region'] ?? $res['Region'] ?? null,
+                'regionGroup' => $res['regionGroup'] ?? $res['group'] ?? $this->toGroup($res['region'] ?? null),
+            ];
         }
-
-        if (!$key && $cfg->lsxCacheTtl > 0) {
-            // fallback: bytes + relPath if provided
-            $rel = (string)($ctx['relPath'] ?? '');
-            $key = 'lsx_' . md5($rel . '#' . strlen($bytes));
+        $chunk = @file_get_contents($abs, false, null, 0, 131072) ?: '';
+        if (preg_match('~<\s*region[^>]*\bid\s*=\s*"([^"]+)"~i', $chunk, $m)) {
+            $r = $m[1];
+            return ['region' => $r, 'regionGroup' => $this->toGroup($r)];
         }
+        return ['region' => null, 'regionGroup' => null];
+    }
 
-        if ($cfg->lsxCacheTtl > 0 && $key) {
-            $cached = cache($key);
-            if (is_array($cached) && isset($cached['payload'], $cached['meta'])) {
-                $tele->end($tok, ['path' => $rel ?? $abs, 'cached' => true]);
-                return $cached;
-            }
-        }
-    
-        $__t0 = hrtime(true);
-        $region = $this->helper->detectRegionFromHead($bytes);
-        $group  = $this->helper->regionGroupFromId($region);
+    public function read(string $abs, array $ctx = []): array
+    {
+        $payload = $this->normalize($abs, $ctx);     // your existing normalizer
+        $peek    = $this->peek($abs, $ctx);          // your existing peeker
+
+        $region      = $peek['region']      ?? null;
+        $regionGroup = $peek['regionGroup'] ?? null;
 
         $meta = [
-            'region' => $region,
-            'regionGroup'  => $group,
+            'region'      => $region ? (string)$region : null,
+            'regionGroup' => $regionGroup ? (string)$regionGroup : null,
         ];
-        $lsxCfg = service('lsxConfig');
-        $normalizer = service('lsxNormalizer');
-        try {
-            $payload = $normalizer->normalize($bytes);   // ← canonical JSON tree
-        } catch (\Throwable $e) {
-            // Fallback: keep working even if a file isn’t strictly well-formed
-            $payload = ['raw' => $bytes, 'error' => $e->getMessage()];
+
+        if (\is_string($regionGroup) && \strtolower($regionGroup) === 'dialog') {
+            // Build the localization handle map, then summarize
+            $handles = $this->loadHandlesForFile($abs, $ctx);
+            $summ    = new \App\Services\Dialog\DialogSummarizer(\is_array($handles) ? $handles : [], $abs);
+            $meta['dialog'] = $summ->summarize($payload);
+
+            // Optional: expose a small sample so you can sanity-check in the browser
+            if (!empty($handles)) {
+                $sample = \array_slice(\array_keys($handles), 0, 5);
+                $meta['localization'] = [
+                    'handlesCount' => \count($handles),
+                    'sampleKeys'   => $sample,
+                ];
+            } else {
+                $meta['localization'] = [
+                    'handlesCount' => 0,
+                    'sampleKeys'   => [],
+                ];
+            }
         }
 
-        $jsonTree = null;
+        return [
+            'kind'    => 'lsx',
+            'ext'     => 'lsx',
+            'meta'    => $meta,
+            'payload' => $payload,
+            'result'  => $payload, // keep for back-compat if the UI still reads result.*
+        ];
+    }
 
-        try {
-            $scanner = new \App\Libraries\LocalizationScanner(
-                $lsxCfg->restrictToLocalizationDir,
-                $lsxCfg->validateLocalizationHead
-            );
 
-            $handleMap = [];
-
-            // Only build a map when we know the mod folder
-            if (!empty($ctx['rootKey']) && !empty($ctx['slug'])) {
-                $modAbs = $this->paths->join($ctx['rootKey'], $ctx['slug'], null);
-
-                // Prefer a language-aware selection via manifest
-                $manifest = $scanner->scanMyModsManifest(null);
-                if (isset($manifest[$ctx['slug']])) {
-                    if ($lsxCfg->mergeAllLanguages) {
-                        // merge every XML for the mod
-                        $handleMap = $scanner->buildHandleMapForMod($manifest, $ctx['slug'], null, [], true);
-                    } else {
-                        // pick from preferredLanguages in order, or the default
-                        $handleMap = $scanner->buildHandleMapForMod(
-                            $manifest,
-                            $ctx['slug'],
-                            null,
-                            $lsxCfg->preferredLanguages,
-                            false
-                        );
-                    }
-                } else {
-                    // fallback: brute scan for XMLs in the mod folder
-                    $langXmls  = $scanner->findLocalizationXmlsForMod($modAbs);
-                    $handleMap = $scanner->buildHandleMapFromFiles($langXmls, true);
+    /** Low-level: parse XML to normalized array (or delegate to helper). */
+    public function normalize(string $abs): array
+    {
+        if ($this->helper) {
+            foreach (['readNormalized','normalize','parse','read'] as $m) {
+                if (method_exists($this->helper, $m)) {
+                    $res = $this->helper->{$m}($abs);
+                    if (is_array($res)) return $res;
                 }
             }
+        }
+        $xml = @file_get_contents($abs) ?: '';
+        if ($xml === '') return ['raw' => ''];
+        $sx = @simplexml_load_string($xml);
+        if ($sx === false) return ['raw' => $xml];
+        $dom = dom_import_simplexml($sx);
+        if (!$dom) return ['raw' => $xml];
+        return $this->domToNormalized($dom);
+    }
 
-            // Parse LSX with the handle map (injects attrs.text for TranslatedString handles)
-            $jsonTree = $scanner->parseLsxWithHandleMapToJson($bytes, $handleMap);
-        } catch (\Throwable $__) {
-            // Fallback to generic XML→JSON if enrichment blows up
+    private function domToNormalized(\DOMNode $node): array
+    {
+        $out = ['tag' => $node->nodeName, 'attr' => [], 'children' => []];
+        if ($node->attributes) {
+            foreach ($node->attributes as $a) $out['attr'][$a->nodeName] = $a->nodeValue;
+        }
+        foreach ($node->childNodes as $c) {
+            if ($c->nodeType === XML_TEXT_NODE) {
+                $txt = trim($c->nodeValue ?? '');
+                if ($txt !== '') $out['children'][] = ['tag' => '#text', 'text' => $txt];
+            } elseif ($c->nodeType === XML_ELEMENT_NODE) {
+                $out['children'][] = $this->domToNormalized($c);
+            }
+        }
+        return $out;
+    }
+
+    private function toGroup(?string $region): ?string
+    {
+        if ($region === null) return null;
+        $r = strtolower($region);
+        if ($r === 'dialog' || $r === 'dialogs' || $r === 'story.dialog') return 'dialog';
+        return null;
+    }
+
+    /**
+     * Build a handle -> { text, version } map for the LSX's module.
+     * Supports <content contentuid="..."> and <content handle="...">, and grabs
+     * any descendant <text>...</text> (male/female branches included).
+     */
+    private function loadHandlesForFile(string $abs, array $ctx): array
+    {
+        // Caller supplied a map? use it.
+        if (!empty($ctx['handles']) && is_array($ctx['handles'])) {
+            return $ctx['handles'];
+        }
+
+        // Preferred: a scanner, if your project has one wired.
+        if (class_exists(\App\Libraries\LocalizationScanner::class)) {
             try {
-                $jsonTree = \App\Helpers\XmlHelper::createJson($bytes, true);
-            } catch (\Throwable $___) {
-                $jsonTree = null;
+                $scanner = new \App\Libraries\LocalizationScanner(true, true);
+                if (method_exists($scanner, 'scanModule')) {
+                    $h = $scanner->scanModule(\dirname($abs), 'English');
+                    if (is_array($h) && $h) return $h;
+                } elseif (method_exists($scanner, 'scan')) {
+                    $h = $scanner->scan(\dirname($abs), 'English');
+                    if (is_array($h) && $h) return $h;
+                }
+            } catch (\Throwable $e) {
+                // fall through to manual parse
             }
         }
 
-        $payload = $jsonTree ? json_decode($jsonTree, true) : null;
-        if (!is_array($payload)) {
-            $payload = ['raw' => $bytes];
+        // Walk up to the nearest .../Localization/English/english.xml
+        $dir  = \dirname($abs);
+        $root = null;
+        for ($i = 0; $i < 10; $i++) {
+            if (\is_dir($dir . DIRECTORY_SEPARATOR . 'Localization')) { $root = $dir; break; }
+            $parent = \dirname($dir);
+            if ($parent === $dir) break;
+            $dir = $parent;
+        }
+        if (!$root) return [];
+
+        $english = $root . DIRECTORY_SEPARATOR . 'Localization' . DIRECTORY_SEPARATOR . 'English' . DIRECTORY_SEPARATOR . 'english.xml';
+        if (!\is_file($english)) return [];
+
+        $xml = @\file_get_contents($english);
+        if ($xml === false || $xml === '') return [];
+
+        $map = [];
+
+        // Capture each <content ...>...</content> that has contentuid or handle
+        if (\preg_match_all('~<content\b([^>]*)>(.*?)</content>~is', $xml, $blocks, PREG_SET_ORDER)) {
+            foreach ($blocks as $blk) {
+                $attrs = $blk[1];
+                $inner = $blk[2];
+
+                // Extract the key (prefer contentuid, else handle)
+                $key = null;
+                if (\preg_match('~\bcontentuid\s*=\s*"([^"]+)"~i', $attrs, $m)) {
+                    $key = $m[1];
+                } elseif (\preg_match('~\bhandle\s*=\s*"([^"]+)"~i', $attrs, $m)) {
+                    $key = $m[1];
+                }
+                if ($key === null || $key === '') continue;
+
+                // Try to extract a version if available
+                $version = null;
+                if (\preg_match('~\bversion\s*=\s*"([^"]+)"~i', $attrs, $vm)) {
+                    $version = $vm[1];
+                }
+
+                // Extract first <text>…</text> anywhere in the content block (male/female/etc)
+                $text = '';
+                if (\preg_match('~<text[^>]*>(.*?)</text>~is', $inner, $tm)) {
+                    $text = \html_entity_decode(\trim($tm[1]), ENT_QUOTES | ENT_XML1, 'UTF-8');
+                } else {
+                    // Fallback: strip tags & take whatever remains
+                    $stripped = \trim(\preg_replace('~<[^>]+>~', '', $inner) ?? '');
+                    if ($stripped !== '') $text = \html_entity_decode($stripped, ENT_QUOTES | ENT_XML1, 'UTF-8');
+                }
+
+                // Store under both original and lowercased keys for tolerant lookup
+                $map[$key] = ['text' => $text, 'version' => $version];
+                $lc = \strtolower($key);
+                if (!isset($map[$lc])) {
+                    $map[$lc] = ['text' => $text, 'version' => $version];
+                }
+            }
         }
 
-        $__ms = (hrtime(true) - $__t0) / 1e6;
-        log_message('info', 'LSX parse {path} region={region} group={group} ms={ms}', [
-            'path'   => ($ctx['relPath'] ?? $ctx['abs'] ?? '(unknown)'),
-            'region' => $meta['region'] ?? null,
-            'group'  => $meta['regionGroup'] ?? null,
-            'ms'     => number_format($__ms, 3),
-        ]);
-        if ($cfg->lsxCacheTtl > 0 && $key) {
-            cache()->save($key, ['payload' => $payload, 'meta' => $meta], $cfg->lsxCacheTtl);
-        }
-        $tele->end($tok, ['path' => $rel ?? $abs, 'cached' => false]);
-
-        return ['payload' => $payload, 'meta' => $meta];
+        return $map;
     }
-}
 
+}
+?>
