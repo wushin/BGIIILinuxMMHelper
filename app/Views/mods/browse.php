@@ -37,7 +37,7 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 <style>
   :root {
     --left-col: 360px;   /* JS will auto-size this */
-    --right-col: 320px;
+    --right-col: 400px;
   }
 
   /* Wrap that matches main width & keeps columns together */
@@ -113,9 +113,10 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 
   /* Middle viewer & right details panels */
   .panel.tall { height: calc(100vh - var(--header-h) - 24px); min-height:0; }
-  .panel > .body { padding:.8rem; flex:1 1 auto; overflow:auto; min-height:0; }
+  .panel > .body { padding:.8rem; overflow:auto; min-height:0; }
 
   /* Small utilities */
+.hidden{display:none !important;}
   .muted { color:#8b949e; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
   img.dynImg { max-width:100%; height:auto; display:block; }
@@ -137,6 +138,157 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   }
   .node.active .node-label { font-weight: 600; }
   .tree-panel .node:hover { background: rgba(255, 255, 255, 0.06); }
+
+  /* ---- Dialog meta (lives directly in #dialogMeta) ---- */
+  #dialogMeta .dlg-h4, #dialogMeta .dlg-h5 { 
+    margin: 10px 0 6px; font-weight: 600; color:#c9d1d9;
+  }
+  #dialogMeta .dlg-row{
+    display:grid;
+    grid-template-columns:minmax(120px,38%) 1fr;
+    gap:8px 12px;
+    align-items:center;
+    padding:4px 0;
+  }
+  #dialogMeta .dlg-label{ color:#8b949e; font-size:.85rem; }
+  #dialogMeta .dlg-val{ color:#c9d1d9; font-size:.92rem; }
+
+  /* IDs look mono + copyable */
+  #dialogMeta .dlg-val.mono{
+    font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
+    background:#21262d; border:1px solid #30363d; border-radius:8px;
+    padding:3px 8px; line-height:1.25;
+  }
+  #dialogMeta .dlg-val.mono.copyable{ cursor:pointer; position:relative; }
+  #dialogMeta .dlg-val.mono.copyable::after{
+    content:"Copy"; position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:.7rem; color:#8b949e; opacity:0; transition:.15s;
+  }
+  #dialogMeta .dlg-val.mono.copyable:hover::after{ opacity:.9; }
+
+  /* Inline editing */
+  #dialogMeta .dlg-val.editable{ cursor:text; }
+  #dialogMeta .dlg-val[contenteditable="true"]{
+    outline:1px dashed #58a6ff; background:#0f1620; border-radius:8px; border:1px solid #1f6feb;
+  }
+
+  /* Chips & table */
+  #dialogMeta .dlg-chiprow{ display:flex; flex-wrap:wrap; gap:6px; }
+  #dialogMeta .chip{
+    display:inline-flex; gap:6px; padding:4px 8px; border-radius:999px;
+    background:#21262d; border:1px solid #30363d; color:#c9d1d9; font-size:.85rem;
+  }
+  #dialogMeta .chip-narrator{ background:rgba(210,168,255,.12); color:#d2a8ff; border-color:rgba(210,168,255,.35); }
+
+  #dialogMeta .dlg-table{ width:100%; border-collapse:collapse; font-size:.88rem; }
+  #dialogMeta .dlg-table th,#dialogMeta .dlg-table td{ padding:6px 8px; border-bottom:1px solid #30363d; color:#c9d1d9; }
+  #dialogMeta .dlg-table th{ color:#8b949e; text-align:left; }
+
+  #dialogMeta .dlg-problems{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  #dialogMeta .dlg-problems .pill{
+    padding:3px 8px; border-radius:999px; font-size:.8rem;
+    background:rgba(48,54,61,.55); color:#c9d1d9; border:1px solid #30363d;
+  }
+  /* Dialog node shell */
+  .dlg-node {
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    background: #0d1117;
+    margin: 6px 0;
+  }
+
+  /* Header row: click to toggle */
+  .dlg-node-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #21262d;
+    cursor: pointer;
+  }
+
+  /* Hide body/meta/children when collapsed */
+  .dlg-node.collapsed .dlg-node-meta,
+  .dlg-node.collapsed .dlg-node-body,
+  .dlg-node.collapsed .dlg-node-children {
+    display: none;
+  }
+
+  /* Tiny caret indicator */
+  .dlg-node-head .caret {
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #8b949e;
+    transition: transform .15s ease;
+  }
+  .dlg-node:not(.collapsed) .dlg-node-head .caret { transform: rotate(180deg); }
+
+  /* Hide body when collapsed */
+  .dlg-node.collapsed .dlg-node-body { display: none; }
+
+  /* (optional) nicer shell & clickable header */
+  .dlg-node { border:1px solid #21262d; border-radius:10px; background:#0d1117; margin:6px 0; }
+  .dlg-node-hd { display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #21262d; cursor:pointer; }
+  .dlg-node-hd .toggle { margin-left:auto; } /* keep your button on the right */
+  /* --- Dialog node body formatting --- */
+  .dlg-node-body { padding: 8px 10px; }
+
+  /* key–value rows */
+  .kv {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 6px 12px;
+    align-items: center;
+    margin: 4px 0;
+  }
+  .kv .k { color: #8b949e; font-size: .85rem; }
+  .kv .v { color: #c9d1d9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* children list → chips */
+  .children { margin-top: 10px; }
+  .children .k { display: inline-block; margin-right: 8px; color: #8b949e; }
+  .children ul {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip-uuid {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+    border-radius: 999px;
+    background: #21262d; border: 1px solid #30363d;
+    color: #c9d1d9;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .85rem; text-decoration: none;
+  }
+  .chip-uuid .short {
+    max-width: 200px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .endnote { margin-top: 6px; color: #8b949e; font-style: italic; }
+
+  /* flags group */
+  .flag-group { margin-top: 10px; border: 1px solid #30363d; border-radius: 8px; background: #0f1319; }
+  .flag-title {
+    padding: 6px 8px; border-bottom: 1px solid #30363d; font-weight: 600; color: #c9d1d9;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .flag-title .count { color: #8b949e; font-weight: 400; }
+  .flag-group ul { list-style: none; margin: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .flag-li {
+    display: grid;
+    grid-template-columns: repeat(4, max-content) 1fr;
+    gap: 6px 12px; align-items: center;
+  }
+  .flag-li code {
+    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+    padding: 2px 6px; font-size: .8rem;
+  }
+  .flag-target { color: #c9d1d9; }
+
 </style>
 <?= $this->endSection() ?>
 
@@ -200,9 +352,13 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 
     <!-- RIGHT: Details -->
     <aside class="panel tall">
-      <div class="head">Details</div>
+      <div class="head">Tags</div>
       <div class="body" id="meta">
         <div class="muted">Region, type, and other metadata will appear here.</div>
+      </div>
+      <div class="head hidden" id="dlgHead">Dialog</div>
+      <div class="body hidden" id="dialogMeta">
+        <div class="muted">Dialog-specific tags and speakers will appear here.</div>
       </div>
     </aside>
   </div>
@@ -212,6 +368,13 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 
 <?= $this->section('scripts') ?>
 <script>
+// --- HTML escape helper (global) ---
+window.esc = window.esc || function esc(v) {
+  const s = String(v ?? '');
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
+  return s.replace(/[&<>"'`]/g, ch => map[ch]);
+};
+
 (function(){
   const rootEl  = document.getElementById('modLayout');
   const root    = rootEl?.dataset?.root || '';
@@ -223,7 +386,10 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   const meta    = document.getElementById('meta');
   const colLeft = document.getElementById('colLeft');
 
-  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+    function hideDialogSection(){ dlgHead?.classList.add('hidden'); dialogMeta?.classList.add('hidden'); dialogMeta.innerHTML=''; }
+  const dlgHead = document.getElementById('dlgHead');
+  const dialogMeta = document.getElementById('dialogMeta');
+
   function badgeBar(obj) {
     const items=[];
     if (obj.kind)        items.push(`<span class="badge">kind: ${esc(obj.kind)}</span>`);
@@ -266,8 +432,8 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     const data = await r.json();
 
     meta.innerHTML = badgeBar(data);
-
-    persistSelection(rel); 
+      // dialog section handled separately below
+persistSelection(rel); 
     saveLocal(rel);
     setUrlSelection(rel);
 
@@ -287,8 +453,64 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     const isTextLike    = textLikeExts.includes(ext) || textLikeKinds.includes(kind);
 
     if (kind === 'lsx' && regionGroup === 'dialog' && dlg) {
-      meta.innerHTML = badgeBar(data) + renderDialogTags(dlg);
+      meta.innerHTML = badgeBar(data);
+      // dialog section handled separately below
+if (dlg) {
+        dlgHead?.classList.remove('hidden');
+        dialogMeta?.classList.remove('hidden');
+        dialogMeta.innerHTML = renderDialogTags(dlg);
+        enhanceDialogMeta();
+      } else {
+        dlgHead?.classList.add('hidden');
+        dialogMeta?.classList.add('hidden');
+        dialogMeta.innerHTML = '';
+      }
       view.innerHTML = renderDialogNodes(dlg, metaObj);
+
+      // Delegate clicks from the viewer once
+      if (!view.__dlgBound) {
+        view.addEventListener('click', (e) => {
+          // 1) Click on a local node link: open the target node and scroll to it
+          const aLocal = e.target.closest('a.link-local');
+          if (aLocal) {
+            e.preventDefault();
+            const href = aLocal.getAttribute('href') || '';
+            const id = href.charAt(0) === '#' ? href.slice(1) : href; // e.g. "node-<uuid>"
+            const target = document.getElementById(id);
+            if (target) {
+              target.classList.remove('collapsed');
+              target.setAttribute('aria-expanded', 'true');
+              try { target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+              catch (_) { target.scrollIntoView(); }
+            }
+            return;
+          }
+
+          // 2) Click header (or its Toggle button): toggle open/closed
+          const headOrBtn = e.target.closest('.dlg-node-hd, .dlg-node-hd .toggle');
+          if (!headOrBtn) return;
+          const node = headOrBtn.closest('.dlg-node');
+          if (!node) return;
+          node.classList.toggle('collapsed');
+          node.setAttribute('aria-expanded', node.classList.contains('collapsed') ? 'false' : 'true');
+        });
+        view.__dlgBound = true;
+      }
+
+      // Delegate header or button click to toggle that node
+      if (!view.__dlgBound) {
+        view.addEventListener('click', (e) => {
+          const headOrBtn = e.target.closest('.dlg-node-hd, .dlg-node-hd .toggle');
+          if (!headOrBtn) return;
+          const node = e.target.closest('.dlg-node');
+          if (!node) return;
+          node.classList.toggle('collapsed');
+          node.setAttribute('aria-expanded', node.classList.contains('collapsed') ? 'false' : 'true');
+        });
+        view.__dlgBound = true;
+      }
+
+      // Expand / Collapse all
       document.getElementById('dlg-expand-all')?.addEventListener('click', () => {
         document.querySelectorAll('.dlg-node').forEach(n => n.classList.remove('collapsed'));
       });
@@ -298,7 +520,8 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
       return;
     }
 
-    if (kind === 'image') {
+    hideDialogSection();
+      if (kind === 'image') {
       if (result.dataUri) {
         view.innerHTML = `<img class="dynImg" src="${esc(result.dataUri)}" alt="preview">`;
       } else if (ext === 'dds') {
@@ -309,7 +532,8 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
       return;
     }
 
-    if (isTextLike && raw) {
+    hideDialogSection();
+      if (isTextLike && raw) {
       view.innerHTML = `<pre><code>${esc(raw)}</code></pre>`;
       return;
     }
@@ -506,86 +730,67 @@ tree.addEventListener('click', (e) => {
   }
 })();
 
-
-function resolveDialogLineText(tt, meta) {
-  if (tt && typeof tt.text === 'string' && tt.text.trim()) {
-    return esc(tt.text);
-  }
-  const handles = meta?.localization?.handles || {};
-  if (tt?.handle && handles[tt.handle]?.text) {
-    return esc(handles[tt.handle].text);
-  }
-  if (tt?.handle) return `<span class="muted">[${esc(tt.handle)}]</span>`;
-  return `<span class="muted">(no text)</span>`;
-}
 function renderDialogTags(dlg) {
-  const esc = (s)=>String(s??'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
-  const cat = esc(dlg.category || '');
-  const duu = esc(dlg.dialogUuid || '');
-  const tid = esc(dlg.timelineId || '');
+  const escHtml = (s) => esc(String(s ?? ''));
+  const speakerChip = (s) => `<span class="chip">#${s.index} (${escHtml(s.mappingId)})</span>`;
+  const narratorPresent = dlg?.speakers?.narrator?.present === true;
 
-  const chips = (dlg.speakers?.list || [])
-    .map(s => `<span class="chip">#${s.index}${s.mappingId ? ' ('+esc(s.mappingId)+')' : ''}</span>`).join(' ')
-    + ` <span class="chip chip-narrator">Narrator</span>`;
+  const addressedRows = (dlg?.speakers?.addressed ?? []).map(m => {
+    const to = (m.toIndex === -1) ? 'none' : (m.toIndex === -666 ? 'Narrator' : `#${m.toIndex}`);
+    return `<tr><td>#${m.fromIndex}</td><td>${escHtml(to)}</td></tr>`;
+  }).join('') || `<tr><td colspan="2" class="muted">none</td></tr>`;
 
-  const rows = (dlg.speakers?.addressed || []).map(r => {
-    const to = r.toIndex === -666 ? 'Narrator' : (r.toIndex === -1 ? 'none' : `#${r.toIndex}`);
-    return `<tr><td>#${r.fromIndex}</td><td>${to}</td></tr>`;
-  }).join('');
+  const chips = (dlg?.speakers?.list ?? []).map(speakerChip).join(' ')
+    + (narratorPresent ? ' <span class="chip chip-narrator">Narrator</span>' : '');
 
-  const p = dlg.problems || {};
-  const pills = [
-    (p.edges?.orphans || []).length ? `<span class="pill err">Orphan links: ${(p.edges.orphans || []).length}</span>` : '',
-    (p.constructors?.unknown || []).length ? `<span class="pill err">Unknown ctors: ${(p.constructors.unknown || []).length}</span>` : '',
-    (p.speakers?.unmapped || []).length ? `<span class="pill warn">Unmapped speakers: ${(p.speakers.unmapped || []).length}</span>` : '',
-    (p.flags?.invalidParamIndex || []).length ? `<span class="pill warn">Flags invalid: ${(p.flags.invalidParamIndex || []).length}</span>` : '',
+  const category   = dlg?.category ?? '—';
+  const timelineId = dlg?.timelineId ?? '—';
+  const dialogUuid = dlg?.dialogUuid ?? dlg?.uuid ?? '—';
+
+  // exactly the structure requested (no extra wrapper)
+  return [
+    `<div class="dlg-row"><span class="dlg-label">Category</span><span class="dlg-val editable">${escHtml(category)}</span></div>`,
+    `<div class="dlg-row"><span class="dlg-label">TimelineID</span><span class="dlg-val mono copyable" data-copy="${escHtml(timelineId)}">${escHtml(timelineId)}</span></div>`,
+    `<div class="dlg-row"><span class="dlg-label">Dialog UUID</span><span class="dlg-val mono copyable" data-copy="${escHtml(dialogUuid)}">${escHtml(dialogUuid)}</span></div>`,
+    `<h4 class="dlg-h4">Speakers</h4>`,
+    `<div class="dlg-chiprow">${chips}</div>`,
+    `<h5 class="dlg-h5">Default Addressed</h5>`,
+    `<table class="dlg-table"><thead><tr><th>From</th><th>To</th></tr></thead><tbody>${addressedRows}</tbody></table>`,
+    `<div class="dlg-problems"></div>`
   ].join('');
-
-  return `
-    <section class="dlg-tags card">
-      <h3 class="dlg-h3">Dialog</h3>
-      <div class="dlg-row"><span class="dlg-label">Category</span><span class="dlg-val">${cat}</span></div>
-      <div class="dlg-row"><span class="dlg-label">Dialog UUID</span><span class="dlg-val mono">${duu}</span></div>
-      <div class="dlg-row"><span class="dlg-label">TimelineID</span><span class="dlg-val mono">${tid}</span></div>
-      <h4 class="dlg-h4">Speakers</h4>
-      <div class="dlg-chiprow">${chips}</div>
-      <h5 class="dlg-h5">Default Addressed</h5>
-      <table class="dlg-table">
-        <thead><tr><th>From</th><th>To</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="dlg-problems">${pills}</div>
-    </section>`;
 }
 
-function renderDialogNodes(dlg) {
-  const esc = (s)=>String(s??'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
-  const order = dlg.roots?.ordered || [];
-  const nodes = Object.assign({}, dlg.nodes || {});
-  const seen = new Set();
-  const seq  = [];
-  for (const u of order) if (nodes[u]) { seq.push([u, nodes[u]]); seen.add(u); }
-  for (const u in nodes) if (!seen.has(u)) seq.push([u, nodes[u]]);
+function renderDialogNodes(dlg, meta){
+  const order = (dlg && dlg.roots && Array.isArray(dlg.roots.ordered)) ? dlg.roots.ordered : [];
+  const nodes = Object.assign({}, (dlg && dlg.nodes) ? dlg.nodes : {});
+  const seen = new Set(); const seq = [];
+  for (var i=0;i<order.length;i++){ var u=order[i]; if (nodes[u]) { seq.push([u, nodes[u]]); seen.add(u); } }
+  for (var u in nodes){ if (!seen.has(u)) seq.push([u, nodes[u]]); }
 
-  const spMap = new Map((dlg.speakers?.list || []).map(s => [s.index, s.mappingId || '']));
+  const spMap = new Map(((dlg && dlg.speakers && Array.isArray(dlg.speakers.list)) ? dlg.speakers.list : []).map(s => [s.index, s.mappingId || '']));
 
   const flagList = (arr, title) => {
-    if (!arr || !arr.length) return '';
-    const lis = arr.map(f => {
+    const list = Array.isArray(arr) ? arr : [];
+    const cnt = list.length;
+    if (!cnt) return '';
+    const lis = list.map(f => {
       const t = f.target || {};
       const tgt = t.kind === 'narrator' ? 'Narrator'
                 : t.kind === 'none'     ? 'none'
                 : t.kind === 'speaker'  ? `#${t.index} (${esc(t.mappingId || '')})`
-                : t.kind === 'invalid'  ? `<span class="warn">invalid (#${t.index})</span>` : '';
+                : t.kind === 'invalid'  ? `invalid (#${t.index})` : '';
       return `<li class="flag-li">
         <code>type=${esc(f.type)}</code>
         <code>UUID=${esc(f.UUID)}</code>
         <code>value=${f.value ? 'true' : 'false'}</code>
         <code>paramval=${(f.paramval|0)}</code>
-        <span class="flag-target">→ ${tgt}</span>
+        <span class="flag-target">→ ${esc(tgt)}</span>
       </li>`;
     }).join('');
-    return `<div class="flag-group"><div class="flag-title">${title}</div><ul>${lis}</ul></div>`;
+    return `<div class="flag-group">
+      <div class="flag-title">${esc(title)} <span class="count">(${cnt})</span></div>
+      <ul>${lis}</ul>
+    </div>`;
   };
 
   const cards = seq.map(([uuid, n]) => {
@@ -594,9 +799,9 @@ function renderDialogNodes(dlg) {
     const isEnd  = !!n.isEnd;
     const spk    = n.speakerIndex;
 
-    let speaker = '—';
+    var speaker = '—';
     if (spk === -666) speaker = 'Narrator';
-    else if (spk === -1 || spk === null || spk === undefined) speaker = '—';
+    else if (spk === -1 || spk == null) speaker = '—';
     else if (spMap.has(spk)) speaker = `#${spk} (${esc(spMap.get(spk))})`;
     else speaker = `<span class="warn">#${spk} (not in speakerlist)</span>`;
 
@@ -607,31 +812,51 @@ function renderDialogNodes(dlg) {
       return '';
     }).join('');
 
-    const children = (n.children || []).map(c => {
-      if (c.type === 'local')  return `<li><a href="#node-${esc(c.uuid)}" class="link-local">${esc(c.uuid)}</a></li>`;
-      if (c.type === 'nested') return `<li><span class="link-nested" data-target-uuid="${esc(c.uuid)}">Nested → ${esc(c.uuid)}</span></li>`;
-      return `<li><span class="link-orphan">Orphan → ${esc(c.uuid)}</span></li>`;
+    const children = (Array.isArray(n.children) ? n.children : []).map(c => {
+      const uid = String(c.uuid || '');
+      if (c.type === 'local') {
+        return `<li>
+          <a href="#node-${esc(uid)}" class="link-local chip-uuid" title="${esc(uid)}">
+            <span class="short">${esc(uid)}</span>
+          </a>
+        </li>`;
+      }
+      if (c.type === 'nested') {
+        return `<li>
+          <span class="chip-uuid link-nested" data-target-uuid="${esc(uid)}" title="Nested → ${esc(uid)}">
+            <span class="short">Nested → ${esc(uid)}</span>
+          </span>
+        </li>`;
+      }
+      return `<li>
+        <span class="chip-uuid link-orphan" title="Orphan → ${esc(uid)}">
+          <span class="short">Orphan → ${esc(uid)}</span>
+        </span>
+      </li>`;
     }).join('');
 
-    const checks = flagList(n.flags?.checks, 'checkflags');
-    const sets   = flagList(n.flags?.sets,   'setflags');
+    const checks = flagList(n.flags && n.flags.checks, 'checkflags');
+    const sets   = flagList(n.flags && n.flags.sets,   'setflags');
+
+    const classes = ['dlg-node'];
+    classes.push('collapsed');
 
     return `
-      <article class="dlg-node${isRoot ? ' root' : ''}" id="node-${esc(uuid)}">
+      <article class="${classes.join(' ')}" id="node-${esc(uuid)}" aria-expanded="${isRoot ? 'true' : 'false'}">
         <header class="dlg-node-hd">
           ${isRoot ? '<span class="badge root">Root</span>' : ''}
           ${isEnd  ? '<span class="badge end">End</span>'  : ''}
           ${String(ctor).toLowerCase()==='nested' ? '<span class="badge nested">Nested</span>' : ''}
           ${ctor ? `<span class="badge ctor">${esc(ctor)}</span>` : ''}
           <a class="uuid mono" href="#node-${esc(uuid)}">${esc(String(uuid).slice(0,8))}…</a>
-          <button class="btn btn-xxs toggle">Toggle</button>
+          <button class="btn btn-xxs toggle" type="button">Toggle</button>
         </header>
         <section class="dlg-node-body">
           <div class="kv"><span class="k">Speaker</span><span class="v">${speaker}</span></div>
           ${texts ? `<div class="texts">${texts}</div>` : ''}
           <div class="children">
             <span class="k">Children</span>
-            <ul>${children}</ul>
+            <ul>${children || '<li><span class="muted">none</span></li>'}</ul>
             ${isEnd ? `<div class="endnote">Stops here.</div>` : ''}
           </div>
           ${checks}${sets}
@@ -641,10 +866,53 @@ function renderDialogNodes(dlg) {
 
   return `
     <div class="dlg-controls">
-      <button class="btn btn-sm" id="dlg-expand-all">Expand all</button>
-      <button class="btn btn-sm" id="dlg-collapse-all">Collapse all</button>
+      <button class="btn btn-sm" id="dlg-expand-all" type="button">Expand all</button>
+      <button class="btn btn-sm" id="dlg-collapse-all" type="button">Collapse all</button>
     </div>
     <div class="dlg-nodes">${cards}</div>`;
+}
+
+function enhanceDialogMeta() {
+  const root = document.getElementById('dialogMeta');
+  if (!root) return;
+
+  // Click-to-copy for any .copyable
+  root.addEventListener('click', async (e) => {
+    const el = e.target.closest('.copyable');
+    if (!el) return;
+    const txt = (el.dataset.copy ?? el.textContent ?? '').trim();
+    if (!txt) return;
+    try { await navigator.clipboard.writeText(txt); } catch {}
+    el.style.opacity = '0.75';
+    setTimeout(() => { el.style.opacity = ''; }, 220);
+  });
+
+  // Double-click to edit .editable (Category)
+  root.addEventListener('dblclick', (e) => {
+    const el = e.target.closest('.editable');
+    if (!el) return;
+    if (el.getAttribute('contenteditable') !== 'true') {
+      el.setAttribute('contenteditable', 'true');
+      const sel = window.getSelection(), range = document.createRange();
+      range.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(range);
+      el.focus();
+    }
+  });
+
+  // Commit on Enter/blur
+  root.addEventListener('keydown', (e) => {
+    const el = e.target.closest('.editable[contenteditable="true"]');
+    if (!el) return;
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+  });
+  root.addEventListener('blur', (e) => {
+    const el = e.target.closest('.editable[contenteditable="true"]');
+    if (!el) return;
+    el.removeAttribute('contenteditable');
+    const newVal = (el.textContent || '').trim();
+    // TODO: save hook here if desired:
+    // window.dispatchEvent(new CustomEvent('dialogMetaChanged', { detail: { field: 'category', value: newVal } }));
+  }, true);
 }
 
 </script>
