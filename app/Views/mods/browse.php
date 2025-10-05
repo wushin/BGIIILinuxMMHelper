@@ -286,7 +286,12 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     padding: 2px 6px; font-size: .8rem;
   }
   .flag-target { color: #c9d1d9; }
-
+  /* quick highlight pulse for speaker chip on paramval click */
+  .chip-flash {
+    box-shadow: 0 0 0 2px #1f6feb, 0 0 12px rgba(31, 111, 235, 0.55);
+    background: rgba(31, 111, 235, 0.18);
+    transition: box-shadow .2s ease, background .2s ease;
+  }
 </style>
 <?= $this->endSection() ?>
 
@@ -467,6 +472,34 @@ window.esc = window.esc || function esc(v) {
       // Delegate clicks from the viewer once
       if (!view.__dlgBound) {
         view.addEventListener('click', (e) => {
+          // Click on paramval to highlight the speaker chip
+          const pv = e.target.closest('code.paramval-link');
+          if (pv) {
+            const idx = parseInt(pv.getAttribute('data-spk'), 10);
+            const scope = document.getElementById('dialogMeta');
+            if (scope) {
+              let chip = null;
+              if (idx === -666) {
+                // Narrator
+                chip = scope.querySelector('.chip-narrator');
+              } else {
+                // Find the chip whose text starts with "#<idx> "
+                const chips = scope.querySelectorAll('.dlg-chiprow .chip');
+                for (let i = 0; i < chips.length; i++) {
+                  const txt = (chips[i].textContent || '').trim();
+                  if (txt.indexOf(`#${idx} `) === 0) { chip = chips[i]; break; }
+                }
+              }
+              if (chip) {
+                chip.classList.add('chip-flash');
+                try { chip.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+                catch (_) { chip.scrollIntoView(); }
+                setTimeout(() => chip.classList.remove('chip-flash'), 900);
+              }
+            }
+            return;
+          }
+
           // 1) Click on a local node link: open the target node and scroll to it
           const aLocal = e.target.closest('a.link-local');
           if (aLocal) {
@@ -770,20 +803,30 @@ function renderDialogNodes(dlg, meta){
     const list = Array.isArray(arr) ? arr : [];
     const cnt = list.length;
     if (!cnt) return '';
+
     const lis = list.map(f => {
       const t = f.target || {};
       const tgt = t.kind === 'narrator' ? 'Narrator'
                 : t.kind === 'none'     ? 'none'
                 : t.kind === 'speaker'  ? `#${t.index} (${esc(t.mappingId || '')})`
-                : t.kind === 'invalid'  ? `invalid (#${t.index})` : '';
-      return `<li class="flag-li">
-        <code>type=${esc(f.type)}</code>
-        <code>UUID=${esc(f.UUID)}</code>
-        <code>value=${f.value ? 'true' : 'false'}</code>
-        <code>paramval=${(f.paramval|0)}</code>
-        <span class="flag-target">→ ${esc(tgt)}</span>
-      </li>`;
+                : t.kind === 'invalid'  ? `invalid (#${t.index})`
+                : '';
+
+      const hasParam = f.paramval !== null && f.paramval !== undefined;
+
+      const pieces = [
+        `<code>type=${esc(f.type)}</code>`,
+        `<code>UUID=${esc(f.UUID)}</code>`,
+        `<code>value=${f.value ? 'true' : 'false'}</code>`
+      ];
+
+      if (hasParam) {
+        pieces.push(`<code class="paramval-link" data-spk="${(f.paramval | 0)}" title="Click to highlight speaker">paramval=${(f.paramval | 0)}</code>`);      
+      }
+
+      return `<li class="flag-li">${pieces.join(' ')}</li>`;
     }).join('');
+
     return `<div class="flag-group">
       <div class="flag-title">${esc(title)} <span class="count">(${cnt})</span></div>
       <ul>${lis}</ul>

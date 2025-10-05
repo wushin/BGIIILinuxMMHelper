@@ -427,53 +427,78 @@ final class DialogSummarizer
     {
         $checks = [];
         $sets   = [];
+
+        // Helper to emit a flag entry; accepts a precomputed $type (from group or node)
+        $emit = function (array $fnode, string $type) use (&$checks, &$sets, $speakerList, &$problemsFlagBadIdx) {
+            $attrs = $this->getChildAttributes($fnode);
+
+            $UUID  = isset($attrs['UUID']['value']) ? (string)$attrs['UUID']['value'] : null;
+            $value = array_key_exists('value', $attrs) ? $this->boolish($attrs['value']['value'] ?? 'false') : null;
+
+            // paramval is optional now; treat empty string as null
+            $paramval = (isset($attrs['paramval']['value']) && $attrs['paramval']['value'] !== '')
+                ? (int)$attrs['paramval']['value']
+                : null;
+
+            // Still require UUID & value to be meaningful
+            if ($UUID === null || $value === null) {
+                return;
+            }
+
+            // Build target: if paramval is absent, don't try to resolve — mark as 'none'
+            $target = ($paramval === null)
+                ? ['kind' => 'none']
+                : $this->resolveParamTarget($paramval, $speakerList, $problemsFlagBadIdx);
+
+            return [
+                'type'     => $type,
+                'UUID'     => $UUID,
+                'value'    => $value,
+                'paramval' => $paramval,
+                'target'   => $target,
+            ];
+        };
+
         foreach (['checkflags' => &$checks, 'setflags' => &$sets] as $id => &$bucket) {
             foreach ($this->findAllNodesById($node, $id) as $flagsNode) {
-                // Preferred shape: checkflags/setflags -> flaggroup(type=...) -> flag(UUID,value,paramval)
+                // Preferred: flaggroup(type=...) -> flag(...)
                 $groups = $this->findAllNodesById($flagsNode, 'flaggroup');
                 if (!empty($groups)) {
                     foreach ($groups as $grp) {
                         $gattrs = $this->getChildAttributes($grp);
-                        $type = isset($gattrs['type']['value']) ? (string)$gattrs['type']['value'] : 'Global';
+                        $type   = isset($gattrs['type']['value']) ? (string)$gattrs['type']['value'] : 'Global';
+
                         foreach ($this->childBlock($grp) as $f) {
-                            if (($f['tag'] ?? '') !== 'node' || strtolower((string)($f['attr']['id'] ?? '')) !== 'flag') continue;
-                            $attrs = $this->getChildAttributes($f);
-                            $UUID     = isset($attrs['UUID']['value']) ? (string)$attrs['UUID']['value'] : null;
-                            $value    = array_key_exists('value', $attrs) ? $this->boolish($attrs['value']['value'] ?? 'false') : null;
-                            $paramval = isset($attrs['paramval']['value']) ? (int)$attrs['paramval']['value'] : null;
-                            if ($UUID === null || $value === null || $paramval === null) continue;
-                            $bucket[] = [
-                                'type'     => $type,
-                                'UUID'     => $UUID,
-                                'value'    => $value,
-                                'paramval' => $paramval,
-                                'target'   => $this->resolveParamTarget($paramval, $speakerList, $problemsFlagBadIdx),
-                            ];
+                            if (($f['tag'] ?? '') !== 'node' || strtolower((string)($f['attr']['id'] ?? '')) !== 'flag') {
+                                continue;
+                            }
+                            $entry = $emit($f, $type);
+                            if ($entry !== null) {
+                                $bucket[] = $entry;
+                            }
                         }
                     }
                 } else {
-                    // Fallback: direct flag entries under flagsNode
+                    // Fallback: flags listed directly under checkflags/setflags
                     foreach ($this->childBlock($flagsNode) as $f) {
-                        if (($f['tag'] ?? '') !== 'node' || strtolower((string)($f['attr']['id'] ?? '')) !== 'flag') continue;
+                        if (($f['tag'] ?? '') !== 'node' || strtolower((string)($f['attr']['id'] ?? '')) !== 'flag') {
+                            continue;
+                        }
                         $attrs = $this->getChildAttributes($f);
-                        $type     = isset($attrs['type']['value']) ? (string)$attrs['type']['value'] : 'Global';
-                        $UUID     = isset($attrs['UUID']['value']) ? (string)$attrs['UUID']['value'] : null;
-                        $value    = array_key_exists('value', $attrs) ? $this->boolish($attrs['value']['value'] ?? 'false') : null;
-                        $paramval = isset($attrs['paramval']['value']) ? (int)$attrs['paramval']['value'] : null;
-                        if ($UUID === null || $value === null || $paramval === null) continue;
-                        $bucket[] = [
-                            'type'     => $type,
-                            'UUID'     => $UUID,
-                            'value'    => $value,
-                            'paramval' => $paramval,
-                            'target'   => $this->resolveParamTarget($paramval, $speakerList, $problemsFlagBadIdx),
-                        ];
+                        $type  = isset($attrs['type']['value']) ? (string)$attrs['type']['value'] : 'Global';
+
+                        $entry = $emit($f, $type);
+                        if ($entry !== null) {
+                            $bucket[] = $entry;
+                        }
                     }
                 }
             }
         }
+
         return ['checks' => $checks, 'sets' => $sets];
     }
+    
     private function resolveParamTarget(int $paramval, array $speakerList, array &$problemsFlagBadIdx): array
     {
         if ($paramval === -666) return ['kind' => 'narrator'];
