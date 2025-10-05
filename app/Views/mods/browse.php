@@ -360,6 +360,15 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     font-size: 1rem;    /* was ~.85–.92rem */
     font-weight: 600;   /* optional: make it a bit bolder */
   }
+
+  .dlg-val.editable[contenteditable] {
+    outline: 1px dashed transparent;
+    cursor: text;
+  }
+  .dlg-val.editable[contenteditable]:focus {
+    outline-color: var(--accent, #888);
+    background: rgba(0,0,0,0.03);
+  }
 </style>
 <?= $this->endSection() ?>
 
@@ -450,14 +459,15 @@ window.esc = window.esc || function esc(v) {
   const rootEl  = document.getElementById('modLayout');
   const root    = rootEl?.dataset?.root || '';
   const slug    = rootEl?.dataset?.slug || '';
-
+  window.__modsRoot = root;
+  window.__modsSlug = slug;
   
   const tree    = document.getElementById('tree');
   const view    = document.getElementById('viewer');
   const meta    = document.getElementById('meta');
   const colLeft = document.getElementById('colLeft');
 
-    function hideDialogSection(){ dlgHead?.classList.add('hidden'); dialogMeta?.classList.add('hidden'); dialogMeta.innerHTML=''; }
+  function hideDialogSection(){ dlgHead?.classList.add('hidden'); dialogMeta?.classList.add('hidden'); dialogMeta.innerHTML=''; }
   const dlgHead = document.getElementById('dlgHead');
   const dialogMeta = document.getElementById('dialogMeta');
 
@@ -474,6 +484,7 @@ window.esc = window.esc || function esc(v) {
     const segs = rel.split('/').filter(Boolean).map(encodeURIComponent);
     return `/mods/${encodeURIComponent(root)}/${encodeURIComponent(slug)}/${segs.join('/')}` + `?format=json`;
   }
+  window.relToUrl = relToUrl;
 
   function setUrlSelection(rel) {
     try {
@@ -536,6 +547,11 @@ window.esc = window.esc || function esc(v) {
         dialogMeta.innerHTML = '';
       }
       view.innerHTML = renderDialogNodes(dlg, metaObj);
+
+      // Wire up dialog edit state & save binding (Step 4)
+      setCurrentFileForDialogEditing(data, {relPath: rel});
+
+      bindDialogSaveButton();
 
       // Delegate clicks from the viewer once
       if (!view.__dlgBound) {
@@ -847,9 +863,9 @@ function renderDialogTags(dlg) {
 
   // exactly the structure requested (no extra wrapper)
   return [
-    `<div class="dlg-row"><span class="dlg-label">Category</span><span class="dlg-val editable">${escHtml(category)}</span></div>`,
-    `<div class="dlg-row"><span class="dlg-label">TimelineID</span><span class="dlg-val mono copyable" data-copy="${escHtml(timelineId)}">${escHtml(timelineId)}</span></div>`,
-    `<div class="dlg-row"><span class="dlg-label">Dialog UUID</span><span class="dlg-val mono copyable" data-copy="${escHtml(dialogUuid)}">${escHtml(dialogUuid)}</span></div>`,
+    `<div class="dlg-row"><span class="dlg-label">Category</span><span class="dlg-val mono editable" contenteditable="plaintext-only" data-dlg-edit="category">${escHtml(category)}</span></div>`,
+    `<div class="dlg-row"><span class="dlg-label">TimelineID</span><span class="dlg-val mono editable" contenteditable="plaintext-only" data-dlg-edit="timelineId">${escHtml(timelineId)}</span></div>`,  
+    `<div class="dlg-row"><span class="dlg-label">Dialog UUID</span><span class="dlg-val mono editable" contenteditable="plaintext-only" data-dlg-edit="dialogUuid" data-copy="${escHtml(dialogUuid)}">${escHtml(dialogUuid)}</span></div>`,
     `<h4 class="dlg-h4">Speakers</h4>`,
     `<div class="dlg-chiprow">${chips}</div>`,
     `<h5 class="dlg-h5">Default Addressed</h5>`,
@@ -980,8 +996,165 @@ function renderDialogNodes(dlg, meta){
     <div class="dlg-controls">
       <button class="btn btn-sm" id="dlg-expand-all" type="button">Expand all</button>
       <button class="btn btn-sm" id="dlg-collapse-all" type="button">Collapse all</button>
+      <button class="btn btn-sm btn-primary" id="dlg-save-edits" type="button" title="Save">Save</button>
     </div>
     <div class="dlg-nodes">${cards}</div>`;
+}
+
+// --- Dialog editing state & helpers (root-level only for Step 1) ---
+
+// Hold onto the currently loaded normalized LSX payload and route bits
+window.__dlgEdit = {
+  payload: null,   // normalized LSX tree (object)
+  absPath: null,   // absolute or rel path used by your save route
+  postUrl: null    // computed POST URL for saving
+};
+
+// Call this right after you fetch & render a file response
+function setCurrentFileForDialogEditing(json, routeInfo) {
+  window.__dlgEdit.payload = (json && (json.payload || json.result)) ? (json.payload || json.result) : null;
+
+  if (routeInfo && routeInfo.relPath) {
+    const slug = String(window.__modsSlug || '');
+    let rel    = String(routeInfo.relPath).replace(/^\/+/, '');
+
+    // —— Normalize rel FOR SAVE to ALWAYS live under Mods/<slug>/ —— //
+    if (rel.startsWith(`Mods/${slug}/`)) {
+      // already correct
+    } else if (rel.startsWith(`UnpackedMods/${slug}/`)) {
+      rel = rel.replace(`UnpackedMods/${slug}/`, `Mods/${slug}/`);
+    } else if (rel.startsWith('GameData/')) {
+      rel = `Mods/${slug}/` + rel.replace(/^GameData\/+/, '');
+    } else {
+      // e.g. starts with "Story/..." or anything else -> prefix Mods/<slug>/
+      rel = `Mods/${slug}/` + rel;
+    }
+    // ———————————————————————————————————————————————————————— //
+
+    window.__dlgEdit.postUrl = '/save';   // you route POSTs to /save
+    window.__dlgEdit.route = {
+      root: window.__modsRoot || '',
+      slug: slug,
+      rel:  rel                // <— now has Mods/<slug>/... prefix
+    };
+  } else {
+    window.__dlgEdit.postUrl = null;
+    window.__dlgEdit.route   = null;
+  }
+}
+
+// Extract Category / TimelineID edits from the inline DOM
+function collectDialogRootEdits() {
+  const get = sel => document.querySelector(sel)?.textContent?.trim();
+  return {
+    category:   get('[data-dlg-edit="category"]'),
+    timelineId: get('[data-dlg-edit="timelineId"]'),
+    dialogUuid: get('[data-dlg-edit="dialogUuid"]')
+  };
+}
+
+// helpers
+function lsxKids(n){ return Array.isArray(n?.children) ? n.children : (n.children = []); }
+function lsxFind(region, pred){ return lsxKids(region).find(pred) || null; }
+
+// find (or create) an <attribute id="X"> as a direct child of dialogNode
+function ensureTopLevelAttribute(dialogNode, id, typeIfNew, value){
+  const kids = lsxKids(dialogNode);
+  let attr = kids.find(c => c?.tag === 'attribute' && c?.attr?.id === id);
+  if (!attr) {
+    attr = { tag: 'attribute', attr: { id, type: typeIfNew, value: '' }, children: [] };
+    kids.unshift(attr); // insert near the top like your existing structure
+  }
+  if (!attr.attr) attr.attr = {};
+  attr.attr.value = String(value ?? '');
+  return attr;
+}
+
+function applyDialogRootEditsToNormalized(payload, edits){
+  if (!payload || typeof payload !== 'object') return payload;
+
+  // <region id="dialog">
+  const region = lsxFind(payload, c => c?.tag === 'region' && c?.attr?.id === 'dialog');
+  if (!region) return payload;
+
+  // <node id="dialog"> (child of region)
+  const dialogNode = lsxFind(region, c => c?.tag === 'node' && c?.attr?.id === 'dialog');
+  if (!dialogNode) return payload;
+
+  const has = s => typeof s === 'string' && s.trim() !== '' && s !== '—';
+
+  if (has(edits.category)) {
+    ensureTopLevelAttribute(dialogNode, 'category', 'LSString', edits.category.trim());
+  }
+  if (has(edits.timelineId)) {
+    // exact casing: TimelineId
+    ensureTopLevelAttribute(dialogNode, 'TimelineId', 'FixedString', edits.timelineId.trim());
+  }
+  if (has(edits.dialogUuid)) {
+    ensureTopLevelAttribute(dialogNode, 'UUID', 'FixedString', edits.dialogUuid.trim());
+  }
+
+  return payload;
+}
+
+// POST normalized LSX back through your existing save route
+async function saveDialogRootEdits() {
+  const state = window.__dlgEdit;
+  if (!state || !state.payload || !state.postUrl || !state.route) {
+    alert('No dialog payload is loaded for editing.');
+    return;
+  }
+
+  const edits = collectDialogRootEdits();
+  applyDialogRootEditsToNormalized(state.payload, edits);
+
+  // Build x-www-form-urlencoded body the controller expects
+  const form = new URLSearchParams();
+  form.set('root', state.route.root);
+  form.set('slug', state.route.slug);
+  // Use both keys to be compatible with either param name
+  form.set('rel',  state.route.rel);
+  form.set('relPath', state.route.rel);
+
+  // send the normalized tree as JSON string (what ContentService::save expects)
+  form.set('data_json', JSON.stringify({ payload: state.payload }));
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  let res, txt;
+  try {
+    res = await fetch(state.postUrl, {
+      method: 'POST',
+      credentials: 'same-origin', // send cookies for CSRF
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrf
+      },
+      body: form
+    });
+    txt = await res.text();
+  } catch (e) {
+    console.error('Network error during save:', e);
+    alert('Save failed (network). See console.');
+    return;
+  }
+
+  console.log('Save response status:', res.status);
+  console.log('Save response body:', txt);
+  if (!res.ok) {
+    alert(`Save failed (${res.status}). See console for details.`);
+    return;
+  }
+  alert('Saved Category / TimelineID.');
+}
+
+// Bind the Save button when dialog controls are mounted
+function bindDialogSaveButton() {
+  const btn = document.getElementById('dlg-save-edits');
+  if (btn) {
+    btn.addEventListener('click', saveDialogRootEdits, { once: false });
+  }
 }
 
 function enhanceDialogMeta() {

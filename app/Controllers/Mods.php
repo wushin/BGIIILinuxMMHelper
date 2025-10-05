@@ -281,13 +281,23 @@ class Mods extends BaseController
         );
     }
 
-    // POST /mods/{Root}/{slug}/file/{path...} → save
-    public function save(string $root, string $slug, string $relPath): ResponseInterface
+    public function save(?string $root = null, ?string $slug = null, ?string $relPath = null): ResponseInterface
     {
         try {
-            $rootKey = $this->pathResolver->canonicalKey($root);
-            $relPath = ltrim($relPath, '/');
-            $abs     = service('pathResolver')->join($rootKey, $slug, $relPath ?: null);
+            // Support flat /save route: pull identifiers from POST/JSON if not passed via URL
+            if ($root === null || $slug === null || $relPath === null) {
+                $postRoot = $this->request->getPost('root');
+                $postSlug = $this->request->getPost('slug');
+                $postRel  = $this->request->getPost('rel') ?? $this->request->getPost('relPath');
+
+                $root    = $root    ?? (is_string($postRoot) ? $postRoot : '');
+                $slug    = $slug    ?? (is_string($postSlug) ? $postSlug : '');
+                $relPath = $relPath ?? (is_string($postRel)  ? $postRel  : '');
+            }
+
+            $rootKey = $this->pathResolver->canonicalKey((string) $root);
+            $relPath = ltrim((string) $relPath, '/');
+            $abs     = service('pathResolver')->join($rootKey, (string) $slug, $relPath ?: null);
 
             $rules = [
                 'root'    => 'required|valid_root',
@@ -322,16 +332,30 @@ class Mods extends BaseController
                 }
             }
 
+            // Input bodies
             $raw      = $this->request->getPost('data');       // optional raw text
             $dataJson = $this->request->getPost('data_json');  // optional JSON string
 
-            $result = service('contentService')->save($abs, $raw, $dataJson); // new service method
-            $ext    = $result['ext']  ?? strtolower(pathinfo($abs, PATHINFO_EXTENSION));
-            $kind   = $result['kind'] ?? service('mimeGuesser')->kindFromExt($ext);
+            // If client posted application/json, make that available as data_json transparently
+            if (!is_string($dataJson) || $dataJson === '') {
+                if ($this->request->isJSON()) {
+                    $jsonBody = $this->request->getJSON(true);
+                    if (is_array($jsonBody) || is_object($jsonBody)) {
+                        $dataJson = json_encode($jsonBody, JSON_UNESCAPED_UNICODE);
+                    }
+                }
+            }
 
+            // Persist
+            $result = service('contentService')->save($abs, $raw, $dataJson); // returns metadata about the write
+            $ext    = $result['ext']  ?? strtolower((string) pathinfo($abs, PATHINFO_EXTENSION));
+            $kind   = $result['kind'] ?? service('mimeGuesser')->kindFromExt($ext);
+            $bytes  = $result['bytes'] ?? (is_file($abs) ? filesize($abs) : null);
+
+            // Remember selection
             $this->selection->remember([
                 'root'    => $rootKey,
-                'slug'    => $slug,
+                'slug'    => (string) $slug,
                 'relPath' => $relPath,
                 'ext'     => $ext,
                 'kind'    => $kind,
@@ -340,14 +364,14 @@ class Mods extends BaseController
             return $this->response->setJSON([
                 'ok'        => true,
                 'root'      => $rootKey,
-                'slug'      => $slug,
+                'slug'      => (string) $slug,
                 'path'      => $abs,
                 'rel'       => $relPath,
-                'bytes'     => strlen($bytes),
+                'bytes'     => $bytes,
                 'ext'       => $ext,
                 'kind'      => $kind,
-                'from'      => is_string($dataJson) && $dataJson !== '' ? 'json' : 'raw',
-                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => $slug]),
+                'from'      => (is_string($dataJson) && $dataJson !== '') ? 'json' : 'raw',
+                'selection' => $this->selection->recall(['root' => $rootKey, 'slug' => (string) $slug]),
             ]);
 
         } catch (\Throwable $e) {
