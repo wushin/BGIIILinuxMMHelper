@@ -292,6 +292,74 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     background: rgba(31, 111, 235, 0.18);
     transition: box-shadow .2s ease, background .2s ease;
   }
+  /* --- Dialog line formatting (GitHub dark friendly) --- */
+  .texts { display: flex; flex-direction: column; gap: 8px; }
+
+  .texts .line {
+    display: flex;
+    flex-wrap: wrap;           /* id + handle on first row, text on second */
+    gap: 6px 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid #30363d;
+    background: #0f1620;
+    border-radius: 10px;
+  }
+
+  .texts .line:hover { border-color: #3b82f6; }
+
+  /* ID + handle as compact chips */
+  .texts .line-id,
+  .texts .line-handle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    font-size: .82rem;
+  }
+
+  .texts .line-id.mono,
+  .texts .line-handle.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* Keep very long handles from blowing up the layout */
+  .texts .line-handle {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The actual localized text goes on its own row */
+  .texts .line-text {
+    flex: 1 1 100%;
+    margin-top: 2px;
+    padding-left: 10px;
+    border-left: 2px solid #30363d;
+    color: #c9d1d9;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  /* Optional: a subtle “missing” style if there’s no text */
+  .texts .line-missing {
+    flex: 1 1 100%;
+    padding-left: 10px;
+    border-left: 2px solid #5a1a1f;
+    color: #ffa198;
+    font-style: italic;
+  }
+
+  /* Only the "Speaker" label */
+  .k-speaker {
+    font-size: 1rem;    /* was ~.85–.92rem */
+    font-weight: 600;   /* optional: make it a bit bolder */
+  }
 </style>
 <?= $this->endSection() ?>
 
@@ -880,8 +948,8 @@ function renderDialogNodes(dlg, meta){
       </li>`;
     }).join('');
 
-    const checks = flagList(n.flags && n.flags.checks, 'checkflags');
-    const sets   = flagList(n.flags && n.flags.sets,   'setflags');
+    const checks = flagList(n.flags && n.flags.checks, 'Checkflags');
+    const sets   = flagList(n.flags && n.flags.sets,   'Setflags');
 
     const classes = ['dlg-node'];
     classes.push('collapsed');
@@ -897,9 +965,9 @@ function renderDialogNodes(dlg, meta){
         </header>
         <section class="dlg-node-body">
           ${texts ? `<div class="texts">${texts}</div>` : ''}
-          <div class="kv"><span class="k">Speaker</span><span class="v">${speaker}</span></div>
-          <div class="children">
-            <span class="k">Children</span>
+          <div class="kv"><span class="k-speaker">Speaker</span><span class="v">${speaker}</span></div>
+          <div class="kv">
+            <span class="k-speaker">Children</span>
             <ul>${children || '<li><span class="muted">none</span></li>'}</ul>
             ${isEnd ? `<div class="endnote">Stops here.</div>` : ''}
           </div>
