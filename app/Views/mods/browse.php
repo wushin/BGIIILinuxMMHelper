@@ -116,7 +116,7 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   .panel > .body { padding:.8rem; overflow:auto; min-height:0; }
 
   /* Small utilities */
-.hidden{display:none !important;}
+  .hidden{display:none !important;}
   .muted { color:#8b949e; }
   pre, code { white-space: pre-wrap; word-break: break-word; }
   img.dynImg { max-width:100%; height:auto; display:block; }
@@ -145,7 +145,6 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   }
   #dialogMeta .dlg-row{
     display:grid;
-    grid-template-columns:minmax(120px,38%) 1fr;
     gap:8px 12px;
     align-items:center;
     padding:4px 0;
@@ -265,7 +264,6 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     font-size: .85rem; text-decoration: none;
   }
   .chip-uuid .short {
-    max-width: 200px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .endnote { margin-top: 6px; color: #8b949e; font-style: italic; }
@@ -432,8 +430,7 @@ window.esc = window.esc || function esc(v) {
     const data = await r.json();
 
     meta.innerHTML = badgeBar(data);
-      // dialog section handled separately below
-persistSelection(rel); 
+    persistSelection(rel); 
     saveLocal(rel);
     setUrlSelection(rel);
 
@@ -455,7 +452,7 @@ persistSelection(rel);
     if (kind === 'lsx' && regionGroup === 'dialog' && dlg) {
       meta.innerHTML = badgeBar(data);
       // dialog section handled separately below
-if (dlg) {
+    if (dlg) {
         dlgHead?.classList.remove('hidden');
         dialogMeta?.classList.remove('hidden');
         dialogMeta.innerHTML = renderDialogTags(dlg);
@@ -579,7 +576,7 @@ if (dlg) {
     if (!k) return;
     try { localStorage.removeItem(k); } catch (_) {}
   }
-function persistSelection(rel) {
+  function persistSelection(rel) {
     const baseKey = document.getElementById('modLayout')?.dataset?.basekey || '';
     if (!baseKey || !rel) return;
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -597,7 +594,7 @@ function persistSelection(rel) {
       }).catch(()=>{});
     }
   }
-tree.addEventListener('click', (e) => {
+  tree.addEventListener('click', (e) => {
     const el = e.target.closest('.node');
     if (!el || el.classList.contains('dir')) return;
     document.querySelectorAll('.node.active').forEach(n => n.classList.remove('active'));
@@ -805,12 +802,17 @@ function renderDialogNodes(dlg, meta){
     else if (spMap.has(spk)) speaker = `#${spk} (${esc(spMap.get(spk))})`;
     else speaker = `<span class="warn">#${spk} (not in speakerlist)</span>`;
 
-    const texts = (n.texts || []).map(t => {
-      if (t.text)   return `<div class="line"><div class="line-text">${esc(t.text)}</div></div>`;
-      if (t.handle) return `<div class="line"><div class="line-handle mono">${esc(t.handle)}</div></div>`;
-      if (t.lineId) return `<div class="line"><div class="line-missing">Missing text (LineId ${esc(t.lineId)})</div></div>`;
-      return '';
-    }).join('');
+  const texts = (Array.isArray(n.texts) ? n.texts : []).map(t => {
+    const parts = [];
+
+    if (t.lineId) parts.push(`<div class="line-id mono">UUID: ${esc(t.lineId)}</div>`);
+    const resolved = typeof resolveDialogLineText === 'function' ? resolveDialogLineText(t, meta) : '';
+    if (resolved) parts.push(`<div class="line-text">${esc(resolved)}</div>`);
+    if (t.handle) parts.push(`<div class="line-handle mono">${esc(t.handle)}</div>`);
+    if (t.text && !resolved) parts.push(`<div class="line-text">${esc(t.text)}</div>`);
+    if (!parts.length) parts.push(`<div class="line-missing">Missing text</div>`);
+    return `<div class="line">${parts.join('')}</div>`;
+  }).join('');
 
     const children = (Array.isArray(n.children) ? n.children : []).map(c => {
       const uid = String(c.uuid || '');
@@ -844,16 +846,15 @@ function renderDialogNodes(dlg, meta){
     return `
       <article class="${classes.join(' ')}" id="node-${esc(uuid)}" aria-expanded="${isRoot ? 'true' : 'false'}">
         <header class="dlg-node-hd">
+          <div class="head" >${esc(String(uuid))}</div>
           ${isRoot ? '<span class="badge root">Root</span>' : ''}
           ${isEnd  ? '<span class="badge end">End</span>'  : ''}
           ${String(ctor).toLowerCase()==='nested' ? '<span class="badge nested">Nested</span>' : ''}
           ${ctor ? `<span class="badge ctor">${esc(ctor)}</span>` : ''}
-          <a class="uuid mono" href="#node-${esc(uuid)}">${esc(String(uuid).slice(0,8))}…</a>
-          <button class="btn btn-xxs toggle" type="button">Toggle</button>
         </header>
         <section class="dlg-node-body">
-          <div class="kv"><span class="k">Speaker</span><span class="v">${speaker}</span></div>
           ${texts ? `<div class="texts">${texts}</div>` : ''}
+          <div class="kv"><span class="k">Speaker</span><span class="v">${speaker}</span></div>
           <div class="children">
             <span class="k">Children</span>
             <ul>${children || '<li><span class="muted">none</span></li>'}</ul>
