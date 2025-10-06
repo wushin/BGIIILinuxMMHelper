@@ -1,6 +1,8 @@
 <?php
 use Config\LsxRegions;
-$dlg_tags = json_encode(config(LsxRegions::class)->dlg_tags);
+$cfg = config(LsxRegions::class);
+$dlg_tags = json_encode($cfg->dlg_tags);
+$flagTypes = json_encode($cfg->flagTypes);
 helper('url');
 $root   = $root ?? '';
 $slug   = $slug ?? '';
@@ -1081,6 +1083,7 @@ function renderDialogNodes(dlg, meta){
   const order = (dlg && dlg.roots && Array.isArray(dlg.roots.ordered)) ? dlg.roots.ordered : [];
   const nodes = Object.assign({}, (dlg && dlg.nodes) ? dlg.nodes : {});
   const seen = new Set(); const seq = [];
+  const flagTypes = JSON.parse('<?php echo $flagTypes ?>');
   for (var i=0;i<order.length;i++){ var u=order[i]; if (nodes[u]) { seq.push([u, nodes[u]]); seen.add(u); } }
   for (var u in nodes){ if (!seen.has(u)) seq.push([u, nodes[u]]); }
 
@@ -1095,12 +1098,24 @@ function renderDialogNodes(dlg, meta){
     const lis = list.map((f, idx) => {
       const hasParam = f.paramval !== null && f.paramval !== undefined;
       return `<li class="flag-li" data-node-uuid="${esc(nodeUuid)}" data-flag-idx="${idx}">
-        <code>type=
-          <span class="editable"
-                contenteditable="plaintext-only"
-                data-flag-edit="type"
-                data-flag-which="${esc(title)}"
-                data-flag-idx="${idx}">${esc(f.type ?? '')}</span>
+        <code>type
+          <select class="flag-type-select mono"
+                  data-flag-edit="type"
+                  data-flag-which="${esc(title)}"
+                  data-flag-idx="${idx}">
+            ${(() => {
+              const listed = Array.isArray(flagTypes) ? flagTypes : [];
+              const cur    = String(f.type ?? '');
+              const have   = listed.includes(cur);
+              const opts   = listed.map(t =>
+                `<option value="${esc(t)}"${t === cur ? ' selected' : ''}>${esc(t)}</option>`
+              ).join('');
+              // if current type isn’t in the list, include it so it doesn’t get lost
+              const extra  = have || !cur ? '' :
+                `<option value="${esc(cur)}" selected>${esc(cur)}</option>`;
+              return extra + opts;
+            })()}
+          </select>
         </code>
         <code>UUID=
           <span class="editable mono"

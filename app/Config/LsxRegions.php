@@ -14,6 +14,10 @@ class LsxRegions extends BaseConfig
             'TagAnswer','TagCinematic','TagGreeting','TagQuestion'
     ];
 
+    public array $flagTypes = [ 
+            'Global','Local','Object','User','Tag','Dialog','Script','Quest'
+    ];
+
     /** @var array<string,string> */
     public array $groupByRegion = [
         // dialog-ish
