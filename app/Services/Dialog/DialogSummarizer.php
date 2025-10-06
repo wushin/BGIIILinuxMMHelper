@@ -347,82 +347,116 @@ final class DialogSummarizer
         return $s === 'true' || $s === '1' || $s === 'yes';
     }
 
+    private function attrOnNode(array $n, string $wantId): ?string
+    {
+        foreach (($n['children'] ?? []) as $c) {
+            if (($c['tag'] ?? '') !== 'attribute') continue;
+            $id = (string)($c['attr']['id'] ?? '');
+            if (strcasecmp($id, $wantId) === 0) {
+                return isset($c['attr']['value']) ? (string)$c['attr']['value'] : null;
+            }
+        }
+        return null;
+    }
+
     private function parseTexts(array $node): array
     {
         $out = [];
-        $tagTexts = [];
-        // Collect TagText nodes
-        $this->walk($node, function(array $n) use (&$tagTexts) {
-            if (($n['tag'] ?? '') === 'node' && strtolower((string)($n['attr']['id'] ?? '')) === 'tagtext') {
-                $tagTexts[] = $n;
+
+        // Collect <node id="TaggedText"> nodes
+        $taggedTextNodes = [];
+        $this->walk($node, function (array $n) use (&$taggedTextNodes) {
+            if (($n['tag'] ?? '') !== 'node') return;
+            $id = strtolower((string)($n['attr']['id'] ?? ''));
+            if ($id === 'taggedtext') {
+                $taggedTextNodes[] = $n;
             }
         });
 
-        foreach ($tagTexts as $tt) {
-            $attrs  = $this->getChildAttributes($tt);
-            $lineId = isset($attrs['LineId']['value']) ? (string)$attrs['LineId']['value'] : null;
-            $stub   = isset($attrs['stub']['value']) ? $this->boolish($attrs['stub']['value']) : false;
-
-            $handle = null;
-            $text   = null;
-            $version = null;
-
-            // Shape A: attribute id="TagText" carries handle/version/text
-            if (isset($attrs['TagText'])) {
-                $hAttr = $attrs['TagText'];
-                if (isset($hAttr['handle'])) {
-                    $handle = (string)$hAttr['handle'];
-                } elseif (isset($hAttr['value'])) {
-                    // Some normalizers store handle in 'value'
-                    $handle = (string)$hAttr['value'];
-                }
-                if (isset($hAttr['text'])) {
-                    $text = trim((string)$hAttr['text']);
-                    if ($text === '') { $text = null; }
-                }
-                if (isset($hAttr['version'])) {
-                    $version = (string)$hAttr['version'];
-                }
+        foreach ($taggedTextNodes as $ttParent) {
+            // Read HasTagRule off the TaggedText node *itself*
+            $hasTagRule = false;
+            $htr = $this->attrOnNode($ttParent, 'HasTagRule');   // <-- direct read
+            if ($htr !== null) {
+                $hasTagRule = $this->boolish($htr);
             }
 
-            // Shape B: legacy nested <TranslatedString><attribute id="Handle"/></TranslatedString>
-            if ($handle === null) {
-                $this->walk($tt, function(array $n) use (&$handle) {
-                    if (($n['tag'] ?? '') === 'node' && strtolower((string)($n['attr']['id'] ?? '')) === 'translatedstring') {
-                        foreach ($n['children'] ?? [] as $a) {
-                            if (($a['tag'] ?? '') !== 'attribute') continue;
-                            $aid = strtolower((string)($a['attr']['id'] ?? ''));
-                            if ($aid === 'handle' || $aid === 'contentuid') {
-                                $handle = (string)($a['attr']['value'] ?? '');
+            // Collect TagText nodes within this TaggedText subtree
+            $tagTexts = [];
+            $this->walk($ttParent, function (array $n) use (&$tagTexts) {
+                if (($n['tag'] ?? '') === 'node'
+                    && strtolower((string)($n['attr']['id'] ?? '')) === 'tagtext') {
+                    $tagTexts[] = $n;
+                }
+            });
+
+            // Parse each TagText as before
+            foreach ($tagTexts as $tt) {
+                $attrs   = $this->getChildAttributes($tt);
+                $lineId  = isset($attrs['LineId']['value']) ? (string)$attrs['LineId']['value'] : null;
+                $stub    = isset($attrs['stub']['value']) ? $this->boolish($attrs['stub']['value']) : false;
+
+                $handle  = null;
+                $text    = null;
+                $version = null;
+
+                // Shape A: attribute id="TagText" carries handle/version/text
+                if (isset($attrs['TagText'])) {
+                    $hAttr = $attrs['TagText'];
+                    if (isset($hAttr['handle']))   $handle  = (string)$hAttr['handle'];
+                    elseif (isset($hAttr['value'])) $handle = (string)$hAttr['value'];
+
+                    if (isset($hAttr['text'])) {
+                        $text = trim((string)$hAttr['text']);
+                        if ($text === '') $text = null;
+                    }
+                    if (isset($hAttr['version'])) $version = (string)$hAttr['version'];
+                }
+
+                // Shape B: legacy <TranslatedString>…</TranslatedString>
+                if ($handle === null) {
+                    $this->walk($tt, function (array $n) use (&$handle) {
+                        if (($n['tag'] ?? '') === 'node'
+                            && strtolower((string)($n['attr']['id'] ?? '')) === 'translatedstring') {
+                            foreach ($n['children'] ?? [] as $a) {
+                                if (($a['tag'] ?? '') !== 'attribute') continue;
+                                $aid = strtolower((string)($a['attr']['id'] ?? ''));
+                                if ($aid === 'handle' || $aid === 'contentuid') {
+                                    $handle = (string)($a['attr']['value'] ?? '');
+                                }
                             }
                         }
-                    }
-                });
-            }
+                    });
+                }
 
-            // Normalize whitespace-only text to null so handle fallback triggers
-            if ($text !== null && trim($text) === '') { $text = null; }
+                // normalize
+                if ($text !== null && trim($text) === '') $text = null;
 
-            // Resolve text via handle map if needed
-            if (($text === null || $text === '') && $handle) {
-                $candidates = [$handle, strtolower($handle), strtoupper($handle)];
-                foreach ($candidates as $k) {
-                    if (isset($this->handleMap[$k]) && isset($this->handleMap[$k]['text'])) {
-                        $text = (string)$this->handleMap[$k]['text'];
-                        break;
+                // resolve via handle map if needed
+                if (($text === null || $text === '') && $handle) {
+                    foreach ([$handle, strtolower($handle), strtoupper($handle)] as $k) {
+                        if (isset($this->handleMap[$k]['text'])) {
+                            $text = (string)$this->handleMap[$k]['text'];
+                            break;
+                        }
                     }
                 }
-            }
 
-            $entry = [];
-            if ($lineId !== null) $entry['lineId'] = $lineId;
-            if ($handle !== null) $entry['handle'] = $handle;
-            if ($text   !== null) $entry['text']   = $text;
-            if ($stub)            $entry['stub']   = true;
-            if ($entry) $out[] = $entry;
+                $entry = [];
+                if ($lineId   !== null) $entry['lineId']     = $lineId;
+                if ($handle   !== null) $entry['handle']     = $handle;
+                if ($text     !== null) $entry['text']       = $text;
+                if ($version  !== null) $entry['version']    = is_numeric($version) ? (int)$version : $version;
+                if ($stub)              $entry['stub']       = true;
+                                         $entry['hasTagRule'] = $hasTagRule;   // <-- carry from parent
+
+                if ($entry) $out[] = $entry;
+            }
         }
+
         return $out;
     }
+
     private function parseFlags(array $node, array $speakerList, array &$problemsFlagBadIdx): array
     {
         $checks = [];
