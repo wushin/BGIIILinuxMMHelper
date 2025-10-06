@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 namespace App\Services\Dialog;
+use Config\LsxRegions;
 
 /**
  * DialogSummarizer
@@ -13,10 +14,14 @@ final class DialogSummarizer
     private array $handleMap;
     private ?string $abs;
 
+    private array $dlg_tags;
+
     public function __construct(array $handleMap = [], ?string $abs = null)
     {
+        $cfg = config(LsxRegions::class);
         $this->handleMap = $handleMap;
         $this->abs = $abs;
+        $this->dlg_tags = $cfg->dlg_tags;
     }
 
     /** @param array<string,mixed>|array<int,mixed> $lsxTree */
@@ -234,11 +239,6 @@ final class DialogSummarizer
         $problemsUnmappedSpk  = [];
         $problemsFlagBadIdx   = [];
 
-        $allowed = [
-            'ActiveRoll','Alias','Jump','Nested','PassiveRoll','Pop','RollResult',
-            'TagAnswer','TagCinematic','TagGreeting','TagQuestion'
-        ];
-
         $nodesContainer = $this->findFirstNodeById($root, 'nodes');
         if (!$nodesContainer) {
             return [
@@ -280,7 +280,7 @@ final class DialogSummarizer
             $groupIndex   = isset($attrs['GroupIndex']['value']) ? (int)$attrs['GroupIndex']['value']
                            : (isset($attrs['groupindex']['value']) ? (int)$attrs['groupindex']['value'] : null);
 
-            if ($constructor !== null && !in_array($constructor, $allowed, true)) {
+            if ($constructor !== null && !in_array($constructor, $this->dlg_tags, true)) {
                 $problemsUnknownCtors[] = ['uuid' => $uuid, 'value' => $constructor];
             }
             if ($speakerIndex !== null && $speakerIndex >= 0 && !isset($speakerList[$speakerIndex])) {
@@ -535,6 +535,11 @@ final class DialogSummarizer
             'speakers'     => count($speakerList),
             'constructors' => $ctors,
         ];
+    }
+
+    public function getTags(): array
+    {
+        return $this->dlg_tags;
     }
 }
 ?>

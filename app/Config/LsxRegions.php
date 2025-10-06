@@ -9,6 +9,11 @@ use CodeIgniter\Config\BaseConfig;
  */
 class LsxRegions extends BaseConfig
 {
+    public array $dlg_tags = [
+            'ActiveRoll','Alias','Jump','Nested Dialog','PassiveRoll','Pop','RollResult',
+            'TagAnswer','TagCinematic','TagGreeting','TagQuestion'
+    ];
+
     /** @var array<string,string> */
     public array $groupByRegion = [
         // dialog-ish
