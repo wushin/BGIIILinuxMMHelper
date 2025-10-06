@@ -1117,26 +1117,31 @@ function renderDialogNodes(dlg, meta){
             })()}
           </select>
         </code>
-        <code>UUID=
-          <span class="editable mono"
-                contenteditable="plaintext-only"
+        <code>
+          <span class="editable mono">UUID <input type="text"
                 data-flag-edit="UUID"
                 data-flag-which="${esc(title)}"
-                data-flag-idx="${idx}">${esc(f.UUID ?? '')}</span>
+                data-flag-idx="${idx}"
+                value="${esc(f.UUID ?? '')}" />
+          </span>
         </code>
-        <code>value=
-          <span class="editable-toggle"
+        <code>
+          <span class="editable-toggle">value <input type="checkbox"
                 data-flag-edit="value"
                 data-flag-which="${esc(title)}"
-                data-flag-idx="${idx}">${(!!f.value) ? 'true' : 'false'}</span>
+                data-flag-idx="${idx}"
+                {(!!f.value) ? 'checked' : ''} />
+          </span>
         </code>
         ${hasParam ? `
-        <code>paramval=
-          <span class="editable mono"
+        <code>
+          <span class="editable mono">paramval <input type="text"
                 contenteditable="plaintext-only"
                 data-flag-edit="paramval"
                 data-flag-which="${esc(title)}"
-                data-flag-idx="${idx}">${String((f.paramval|0))}</span>
+                data-flag-idx="${idx}"
+                value="${String((f.paramval|0))}" />
+          </span>
         </code>` : ''}
       </li>`;
     }).join('');
@@ -1198,7 +1203,7 @@ function renderDialogNodes(dlg, meta){
       `<div class="dlg-val mono"> Version: <input type="input" class="dlg-val mono"
             data-line-edit="version"
             data-line-idx="${i}"
-            value="${esc(String(t.version ?? t.Version ?? '1'))}" />
+            value="${esc(String(t.version ?? t.Version ?? ''))}" />
        </div>`
     );
 
