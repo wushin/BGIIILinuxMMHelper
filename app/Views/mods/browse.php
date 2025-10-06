@@ -296,9 +296,6 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
   .texts { display: flex; flex-direction: column; gap: 8px; }
 
   .texts .line {
-    display: flex;
-    flex-wrap: wrap;           /* id + handle on first row, text on second */
-    gap: 6px 8px;
     align-items: center;
     padding: 8px 10px;
     border: 1px solid #30363d;
@@ -369,6 +366,248 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
     outline-color: var(--accent, #888);
     background: rgba(0,0,0,0.03);
   }
+/* ---------------------------------------------------------
+   Dialog Node (article) – GitHub Dark aligned, CSS-only
+   (no HTML changes required)
+--------------------------------------------------------- */
+
+/* Card shell polish */
+.dlg-node {
+  background:#0d1117;
+  border:1px solid #21262d;
+  border-radius:10px;
+  box-shadow: 0 0 0 1px rgba(48,54,61,.35), 0 8px 24px rgba(1,4,9,.35);
+}
+.dlg-node:hover {
+  border-color:#30363d;
+  box-shadow: 0 0 0 1px rgba(48,54,61,.55), 0 8px 24px rgba(1,4,9,.55);
+}
+
+/* Header */
+.dlg-node-hd {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid #21262d;
+  background:#0f141b;
+}
+.dlg-node-hd .head {
+  font-weight:600;
+  color:#c9d1d9;
+  padding:2px 6px;
+  border-radius:6px;
+}
+.dlg-node-hd .head.copyable:hover {
+  background:rgba(88,166,255,.12);
+}
+
+/* Body layout */
+.dlg-node-body {
+  padding:10px 12px;
+  display:grid;
+  gap:12px;
+}
+
+/* Badges row (Root/End/Constructor) */
+.dlg-node .badge {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border-radius:8px;
+  background:#0e1622;
+  border:1px solid #21262d;
+  color:#c9d1d9;
+  font-size:.82rem;
+}
+.dlg-node .badge.ctor { background:#0f1a2b; }
+
+/* Select (constructor) */
+.dlg-node select.dlg-tag-select {
+  min-width: 14ch;
+  background:#0d1117;
+  color:#c9d1d9;
+  border:1px solid #30363d;
+  border-radius:6px;
+  padding:6px 28px 6px 8px;
+  outline:0;
+  appearance:none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8b949e 50%),
+    linear-gradient(135deg, #8b949e 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 10px) 50%,
+    0 0;
+  background-size:6px 6px, 6px 6px, 100% 100%;
+  background-repeat:no-repeat;
+}
+.dlg-node select.dlg-tag-select:focus {
+  border-color:#58a6ff;
+  box-shadow:0 0 0 3px rgba(88,166,255,.3);
+  background:#0b1320;
+}
+
+/* Inputs (line fields) */
+.dlg-node input[type="input"],
+.dlg-node input[type="text"],
+.dlg-node input:not([type]),
+.dlg-node textarea {
+  background:#0d1117;
+  color:#c9d1d9;
+  border:1px solid #30363d;
+  border-radius:6px;
+  padding:6px 8px;
+  outline:0;
+}
+.dlg-node input:focus,
+.dlg-node textarea:focus {
+  border-color:#58a6ff;
+  box-shadow:0 0 0 3px rgba(88,166,255,.3);
+  background:#0b1320;
+}
+
+/* Checkboxes use GitHub accent */
+.dlg-node input[type="checkbox"] {
+  accent-color:#1f6feb;
+  transform: translateY(1px);
+}
+
+/* Contenteditable spans look like inputs when focused */
+.dlg-node .editable[contenteditable] {
+  display:inline-block;
+  min-width:6ch;
+  padding:2px 6px;
+  border:1px dashed transparent;
+  border-radius:6px;
+  transition:border-color .15s, background-color .15s;
+}
+.dlg-node .editable[contenteditable]:hover {
+  border-color:#30363d;
+  background:rgba(88,166,255,.06);
+}
+.dlg-node .editable[contenteditable]:focus {
+  border-style:solid;
+  border-color:#58a6ff;
+  box-shadow:0 0 0 3px rgba(88,166,255,.25);
+  background:#0b1320;
+}
+
+/* Text lines block */
+.texts { display:grid; gap:10px; }
+.texts .line {
+  display:grid;
+  gap:8px;
+  padding:10px;
+  background:#0f1620;
+  border:1px solid #30363d;
+  border-radius:10px;
+}
+.texts .line:hover { border-color:#3b82f6; }
+
+/* Each .dlg-val (label + control inline) */
+.texts .dlg-val {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#c9d1d9;
+  font-size:.9rem;
+}
+.texts .dlg-val .mono { font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+/* Make the inline inputs not overgrow */
+.texts .dlg-val input[type="input"] {
+  flex:1 1 auto;
+  min-width: 24ch;
+}
+
+/* Key/Value rows (Speaker / Children) */
+.kv {
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap:6px 12px;
+  align-items:center;
+}
+.k-speaker { color:#8b949e; font-weight:600; }
+.kv .v { color:#c9d1d9; }
+
+/* Children list chips */
+.kv ul {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.kv ul a.chip-uuid {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 8px;
+  background:#0c1726;
+  border:1px solid #30363d;
+  border-radius:999px;
+  color:#c9d1d9;
+  text-decoration:none;
+  font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:.85rem;
+}
+.kv ul a.chip-uuid:hover {
+  border-color:#58a6ff;
+  background:rgba(88,166,255,.12);
+}
+
+/* Flag groups */
+.flag-group {
+  border:1px solid #30363d;
+  border-radius:8px;
+  background:#0f1319;
+}
+.flag-title {
+  padding:6px 8px;
+  border-bottom:1px solid #30363d;
+  font-weight:600;
+  color:#c9d1d9;
+  display:flex; align-items:center; gap:8px;
+}
+.flag-title .count { color:#8b949e; font-weight:400; }
+.flag-group ul {
+  list-style:none; margin:0; padding:8px;
+  display:grid; gap:8px;
+}
+.flag-li code {
+  display:inline-flex; align-items:center; gap:6px;
+  background:#21262d;
+  border:1px solid #30363d;
+  border-radius:6px;
+  padding:2px 6px;
+  font-size:.8rem;
+  color:#c9d1d9;
+}
+.flag-li .editable-toggle {
+  cursor:pointer;
+  padding:2px 6px;
+  border-radius:6px;
+  background:#10243a;
+  border:1px solid #30363d;
+}
+.flag-li .editable-toggle:hover {
+  border-color:#58a6ff;
+  background:rgba(88,166,255,.12);
+}
+
+/* Copyable affordance (header IDs) */
+.copyable { position:relative; }
+.copyable:hover::after {
+  content:"Click to copy";
+  position:absolute;
+  left:0; top:100%; transform:translateY(4px);
+  background:#111827; color:#8b949e;
+  border:1px solid #30363d; border-radius:6px;
+  padding:2px 6px; font-size:11px; white-space:nowrap;
+}
+
 </style>
 <?= $this->endSection() ?>
 
@@ -883,32 +1122,44 @@ function renderDialogNodes(dlg, meta){
 
   const spMap = new Map(((dlg && dlg.speakers && Array.isArray(dlg.speakers.list)) ? dlg.speakers.list : []).map(s => [s.index, s.mappingId || '']));
 
-  const flagList = (arr, title) => {
+  // Editable flags renderer
+  const flagList = (arr, title, nodeUuid) => {
     const list = Array.isArray(arr) ? arr : [];
     const cnt = list.length;
     if (!cnt) return '';
 
-    const lis = list.map(f => {
-      const t = f.target || {};
-      const tgt = t.kind === 'narrator' ? 'Narrator'
-                : t.kind === 'none'     ? 'none'
-                : t.kind === 'speaker'  ? `#${t.index} (${esc(t.mappingId || '')})`
-                : t.kind === 'invalid'  ? `invalid (#${t.index})`
-                : '';
-
+    const lis = list.map((f, idx) => {
       const hasParam = f.paramval !== null && f.paramval !== undefined;
-
-      const pieces = [
-        `<code>type=${esc(f.type)}</code>`,
-        `<code>UUID=${esc(f.UUID)}</code>`,
-        `<code>value=${f.value ? 'true' : 'false'}</code>`
-      ];
-
-      if (hasParam) {
-        pieces.push(`<code class="paramval-link" data-spk="${(f.paramval | 0)}" title="Click to highlight speaker">paramval=${(f.paramval | 0)}</code>`);      
-      }
-
-      return `<li class="flag-li">${pieces.join(' ')}</li>`;
+      return `<li class="flag-li" data-node-uuid="${esc(nodeUuid)}" data-flag-idx="${idx}">
+        <code>type=
+          <span class="editable"
+                contenteditable="plaintext-only"
+                data-flag-edit="type"
+                data-flag-which="${esc(title)}"
+                data-flag-idx="${idx}">${esc(f.type ?? '')}</span>
+        </code>
+        <code>UUID=
+          <span class="editable mono"
+                contenteditable="plaintext-only"
+                data-flag-edit="UUID"
+                data-flag-which="${esc(title)}"
+                data-flag-idx="${idx}">${esc(f.UUID ?? '')}</span>
+        </code>
+        <code>value=
+          <span class="editable-toggle"
+                data-flag-edit="value"
+                data-flag-which="${esc(title)}"
+                data-flag-idx="${idx}">${(!!f.value) ? 'true' : 'false'}</span>
+        </code>
+        ${hasParam ? `
+        <code>paramval=
+          <span class="editable mono"
+                contenteditable="plaintext-only"
+                data-flag-edit="paramval"
+                data-flag-which="${esc(title)}"
+                data-flag-idx="${idx}">${String((f.paramval|0))}</span>
+        </code>` : ''}
+      </li>`;
     }).join('');
 
     return `<div class="flag-group">
@@ -916,6 +1167,7 @@ function renderDialogNodes(dlg, meta){
       <ul>${lis}</ul>
     </div>`;
   };
+
 
   const cards = seq.map(([uuid, n]) => {
     const ctor = n.constructor || '';
@@ -929,67 +1181,155 @@ function renderDialogNodes(dlg, meta){
     else if (spMap.has(spk)) speaker = `#${spk} (${esc(spMap.get(spk))})`;
     else speaker = `<span class="warn">#${spk} (not in speakerlist)</span>`;
 
-  const texts = (Array.isArray(n.texts) ? n.texts : []).map(t => {
+    const texts = (Array.isArray(n.texts) ? n.texts : []).map((t, i) => {
     const parts = [];
 
-    if (t.lineId) parts.push(`<div class="line-id mono">UUID: ${esc(t.lineId)}</div>`);
+    // Line ID
+    parts.push(
+      `<div class="dlg-val mono"> Line Id: <input type="input" class="dlg-val mono"
+            data-line-edit="lineId"
+            data-line-idx="${i}"
+            value="${esc(t.lineId || '')}" />
+       </div>`
+    );
+
+    // Resolved or fallback text (UI editable; LSX no-op unless you add loc writer)
     const resolved = typeof resolveDialogLineText === 'function' ? resolveDialogLineText(t, meta) : '';
-    if (resolved) parts.push(`<div class="line-text">${esc(resolved)}</div>`);
-    if (t.handle) parts.push(`<div class="line-handle mono">${esc(t.handle)}</div>`);
-    if (t.text && !resolved) parts.push(`<div class="line-text">${esc(t.text)}</div>`);
-    if (!parts.length) parts.push(`<div class="line-missing">Missing text</div>`);
-    return `<div class="line">${parts.join('')}</div>`;
+    const shownText = resolved || t.text || '';
+
+    // Handle
+    parts.push(
+      `<div class="dlg-val mono"> Handle: <input type="input" class="dlg-val mono"
+            data-line-edit="handle"
+            data-line-idx="${i}"
+            value="${esc(t.handle || '')}" />
+       </div>`
+    );
+
+    parts.push(
+      `<div class="dlg-val mono"> Text: <input type="input" class="dlg-val mono"
+            data-line-edit="text"
+            data-line-idx="${i}"
+            value="${esc(shownText)}" />
+       </div>`
+    );
+
+    // Version (attribute on TranslatedString)
+    parts.push(
+      `<div class="dlg-val mono"> Version: <input type="input" class="dlg-val mono"
+            data-line-edit="version"
+            data-line-idx="${i}"
+            value="${esc(String(t.version ?? t.Version ?? '1'))}" />
+       </div>`
+    );
+
+    // Tag rule toggle
+    const hasTagRule = !!t.hasTagRule || String(t.HasTagRule || '').toLowerCase() === 'true';
+    parts.push(
+      `<div class="dlg-val mono">Has Tag Rule: <input type="checkbox"
+               data-line-edit="hasTagRule"
+               data-line-idx="${i}"
+               ${hasTagRule ? 'checked' : ''} />
+       </div>`
+    );
+
+    // Stub toggle
+    const isStub = !!t.stub || String(t.stub || '').toLowerCase() === 'true';
+    parts.push(
+      `<div class="dlg-val mono"> Stub: <input type="checkbox"
+               data-line-edit="stub"
+               data-line-idx="${i}"
+               ${isStub ? 'checked' : ''} />
+       </div>`
+    );
+
+    return `<div class="line" data-line-idx="${i}">${parts.join('')}</div>`;
   }).join('');
 
-    const children = (Array.isArray(n.children) ? n.children : []).map(c => {
-      const uid = String(c.uuid || '');
-      if (c.type === 'local') {
-        return `<li>
-          <a href="#node-${esc(uid)}" class="link-local chip-uuid" title="${esc(uid)}">
-            <span class="short">${esc(uid)}</span>
-          </a>
-        </li>`;
-      }
-      if (c.type === 'nested') {
-        return `<li>
-          <span class="chip-uuid link-nested" data-target-uuid="${esc(uid)}" title="Nested → ${esc(uid)}">
-            <span class="short">Nested → ${esc(uid)}</span>
-          </span>
-        </li>`;
-      }
+
+  const childList = Array.isArray(n.children) ? n.children : [];
+
+  const childrenHtml = childList.map(c => {
+    const uid = String(c.uuid || '');
+    if (c.type === 'local') {
       return `<li>
-        <span class="chip-uuid link-orphan" title="Orphan → ${esc(uid)}">
-          <span class="short">Orphan → ${esc(uid)}</span>
+        <a href="#node-${esc(uid)}" class="link-local chip-uuid" title="${esc(uid)}">
+          <span class="short">${esc(uid)}</span>
+        </a>
+      </li>`;
+    }
+    if (c.type === 'nested') {
+      return `<li>
+        <span class="chip-uuid link-nested" data-target-uuid="${esc(uid)}" title="Nested → ${esc(uid)}">
+          <span class="short">Nested → ${esc(uid)}</span>
         </span>
       </li>`;
-    }).join('');
+    }
+    return `<li>
+      <span class="chip-uuid link-orphan" title="Orphan → ${esc(uid)}">
+        <span class="short">${esc(uid)}</span>
+      </span>
+    </li>`;
+  }).join('');
 
-    const checks = flagList(n.flags && n.flags.checks, 'Checkflags');
-    const sets   = flagList(n.flags && n.flags.sets,   'Setflags');
+    const checks = flagList(n.flags && n.flags.checks, 'Checkflags', uuid);
+    const sets   = flagList(n.flags && n.flags.sets,   'Setflags',   uuid);
 
-    const classes = ['dlg-node'];
+    const classes = ['dlg-node', 'editable'];
+    const dlg_tags = [
+            'ActiveRoll','Alias','Jump','Nested Dialog','PassiveRoll','Pop','RollResult',
+            'TagAnswer','TagCinematic','TagGreeting','TagQuestion'
+    ];
     classes.push('collapsed');
 
     return `
-      <article class="${classes.join(' ')}" id="node-${esc(uuid)}" aria-expanded="${isRoot ? 'true' : 'false'}">
+      <article class="${classes.join(' ')}" id="node-${esc(uuid)}"
+               data-node-uuid="${esc(uuid)}"
+               aria-expanded="${isRoot ? 'true' : 'false'}">
         <header class="dlg-node-hd">
-          <div class="head" >${esc(String(uuid))}</div>
-          ${isRoot ? '<span class="badge root">Root</span>' : ''}
-          ${isEnd  ? '<span class="badge end">End</span>'  : ''}
-          ${String(ctor).toLowerCase()==='nested' ? '<span class="badge nested">Nested</span>' : ''}
-          ${ctor ? `<span class="badge ctor">${esc(ctor)}</span>` : ''}
+          <span class="head mono editable copyable" contenteditable="plaintext-only" data-copy="${esc(uuid)}">${esc(String(uuid))}</span>
         </header>
-        <section class="dlg-node-body">
-          ${texts ? `<div class="texts">${texts}</div>` : ''}
-          <div class="kv"><span class="k-speaker">Speaker</span><span class="v">${speaker}</span></div>
-          <div class="kv">
-            <span class="k-speaker">Children</span>
-            <ul>${children || '<li><span class="muted">none</span></li>'}</ul>
-            ${isEnd ? `<div class="endnote">Stops here.</div>` : ''}
-          </div>
-          ${checks}${sets}
-        </section>
-      </article>`;
+          <section class="dlg-node-body">
+            <div class="badge ctor" id="dlg_dis"> Constructor:
+              <select class="dlg-tag-select mono"
+                      data-node-edit="constructor">
+                ${(() => {
+                  const listed = Array.isArray(dlg_tags) ? dlg_tags : [];
+                  const have = listed.includes(String(ctor || ''));
+                  const opts = listed.map(t =>
+                    `<option value="${esc(t)}" data-node-edit="constructor"${t === ctor ? ' selected' : ''}>${esc(t)}</option>`
+                  ).join('');
+                  // if current ctor isn’t in dlg_tags, include it so it doesn’t get lost
+                  const extra = have || !ctor ? '' :
+                    `<option value="${esc(String(ctor))}" data-node-edit="constructor" selected>${esc(String(ctor))}</option>`;
+                  return extra + opts;
+                })()}
+              </select>
+            </div>
+            <div class="badge ctor">Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} /></div>
+            <div class="badge ctor">End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} /></div>
+            ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
+
+            ${texts ? `<div class="texts">${texts}</div>` : ''}
+
+            <div class="kv">
+              <span class="k-speaker">Speaker</span>
+              <span class="v editable mono"
+                      contenteditable="plaintext-only"
+                      data-node-edit="speaker">${esc(spk == null ? '' : String(spk))}</span>
+            </div>
+
+            <div class="kv">
+              <span class="k-speaker">Children</span>
+
+              <ul>${childrenHtml || '<li><span class="muted">none</span></li>'}</ul>
+
+            </div>
+
+            ${checks}${sets}
+          </section>
+        </article>
+      `;
   }).join('');
 
   return `
@@ -1096,57 +1436,252 @@ function applyDialogRootEditsToNormalized(payload, edits){
 
   return payload;
 }
+// === INSERTED: Node/Line appliers ===
+// utility: get children array (creates if missing)
+function nxChildren(n){ return Array.isArray(n?.children) ? n.children : (n.children = []); }
 
-// POST normalized LSX back through your existing save route
-async function saveDialogRootEdits() {
+function findDialogRegion(payload){
+  return nxChildren(payload).find(c => c?.tag === 'region' && c?.attr?.id === 'dialog') || null;
+}
+
+function findNodesBag(region){
+  return nxChildren(region).find(c => c?.tag === 'node' && c?.attr?.id === 'nodes') || null;
+}
+
+function findNodesChildren(region){
+  const bag = findNodesBag(region);
+  if (!bag) return [];
+  const kids = nxChildren(bag).find(c => c?.tag === 'children');
+  return kids ? nxChildren(kids) : [];
+}
+
+function ensureAttr(node, id, typeIfNew){
+  const kids = nxChildren(node);
+  let a = kids.find(c => c?.tag === 'attribute' && c?.attr?.id === id);
+  if (!a) { a = { tag:'attribute', attr:{ id, type: typeIfNew, value:'' }, children:[] }; kids.unshift(a); }
+  if (!a.attr) a.attr = {};
+  return a;
+}
+
+function getNodeByUuid(payload, uuid){
+  const region = findDialogRegion(payload);
+  const nodes = findNodesChildren(region || {});
+  for (const n of nodes){
+    const a = nxChildren(n).find(c => c?.tag === 'attribute' && c?.attr?.id === 'UUID');
+    if (a?.attr?.value === uuid) return n;
+  }
+  return null;
+}
+
+// --- Header fields (constructor/speaker/root/end) ---
+function applyNodeHeaderEdit(payload, uuid, kind, rawValue){
+  const n = getNodeByUuid(payload, uuid);
+  if (!n) return;
+
+  const v = (rawValue ?? '').toString().trim();
+
+  if (kind === 'constructor') {
+    ensureAttr(n, 'constructor', 'FixedString').attr.value = v;
+    return;
+  }
+  if (kind === 'speaker') {
+    const num = Number.parseInt(v || '0', 10);
+    ensureAttr(n, 'speaker', 'int32').attr.value = String(Number.isFinite(num) ? num : 0);
+    return;
+  }
+  if (kind === 'root') {
+    const a = ensureAttr(n, 'Root', 'bool');
+    const curr = String(a.attr.value || a.value || '').toLowerCase() === 'true';
+    a.attr.value = (!curr).toString();
+    return;
+  }
+  if (kind === 'endnode') {
+    const a = ensureAttr(n, 'endnode', 'bool');
+    const curr = String(a.attr.value || a.value || '').toLowerCase() === 'true';
+    a.attr.value = (!curr).toString();
+    return;
+  }
+}
+
+// --- Children list (UUIDs) ---
+function applyNodeChildrenEdit(payload, uuid, textBlob){
+  const n = getNodeByUuid(payload, uuid);
+  if (!n) return;
+
+  // ensure structure: <children><node id="children"><children>...</children></node></children>
+  let outerChildren = nxChildren(n).find(c=>c.tag==='children');
+  if (!outerChildren) { outerChildren = { tag:'children', attr:[], children:[] }; nxChildren(n).push(outerChildren); }
+
+  let nodeChildren = nxChildren(outerChildren).find(c=>c.tag==='node' && c.attr?.id==='children');
+  if (!nodeChildren) { nodeChildren = { tag:'node', attr:{ id:'children' }, children:[] }; outerChildren.children.push(nodeChildren); }
+
+  let innerChildren = nxChildren(nodeChildren).find(c=>c.tag==='children');
+  if (!innerChildren) { innerChildren = { tag:'children', attr:[], children:[] }; nodeChildren.children.push(innerChildren); }
+
+  const uuids = String(textBlob||'').split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+
+  innerChildren.children = uuids.map(u => ({
+    tag:'node',
+    attr:{ id:'child' },
+    children:[ { tag:'attribute', attr:{ id:'UUID', type:'FixedString', value:u }, children:[] } ]
+  }));
+}
+
+// --- Line edits (LineId/Handle/Version/HasTagRule/Stub/Text[no-op]) ---
+function applyLineEdit(payload, uuid, lineIdx, which, value){
+  const n = getNodeByUuid(payload, uuid);
+  if (!n) return;
+
+  // path: node -> TaggedTexts -> TaggedText -> TagTexts -> TagText
+  const getKid = (parent, tag, id) => nxChildren(parent).find(c => c.tag===tag && (id ? c.attr?.id===id : true));
+
+  const taggedTexts = getKid(n, 'node', 'TaggedTexts'); if (!taggedTexts) return;
+  const ttChildren  = getKid(taggedTexts, 'children');   if (!ttChildren) return;
+  const taggedText  = getKid(ttChildren, 'node', 'TaggedText'); if (!taggedText) return;
+  const tgChildren  = getKid(taggedText, 'children');    if (!tgChildren) return;
+  const tagTexts    = getKid(tgChildren, 'node', 'TagTexts');   if (!tagTexts) return;
+  const txChildren  = getKid(tagTexts, 'children');      if (!txChildren) return;
+  const tagText     = getKid(txChildren, 'node', 'TagText');    if (!tagText) return;
+
+  if (which === 'handle') {
+    const a = ensureAttr(tagText, 'TagText', 'TranslatedString');
+    a.handle = String(value||'');
+    return;
+  }
+  if (which === 'lineId') {
+    ensureAttr(tagText, 'LineId', 'guid').attr.value = String(value||'');
+    return;
+  }
+  if (which === 'version') {
+    const a = ensureAttr(tagText, 'TagText', 'TranslatedString');
+    a.version = String(value||'');
+    return;
+  }
+  if (which === 'hasTagRule') {
+    // <attribute id="HasTagRule" ...> lives under TaggedText
+    const a = ensureAttr(taggedText, 'HasTagRule', 'bool');
+    const curr = String(a.attr.value || a.value || '').toLowerCase() === 'true';
+    a.attr.value = (!curr).toString();
+    return;
+  }
+  if (which === 'stub') {
+    // <attribute id="stub" ...> lives under TagText
+    const a = ensureAttr(tagText, 'stub', 'bool');
+    const curr = String(a.attr.value || a.value || '').toLowerCase() === 'true';
+    a.attr.value = (!curr).toString();
+    return;
+  }
+  if (which === 'text') {
+    // localization-backed; LSX no-op
+    return;
+  }
+}
+
+// --- Flags (Checkflags / Setflags) ---
+function applyFlagEdit(payload, uuid, which /* 'Checkflags'|'Setflags' */, idx, field, rawValue){
+  const n = getNodeByUuid(payload, uuid);
+  if (!n) return;
+
+  const bagId = which === 'Checkflags' ? 'checkflags' : 'setflags';
+  const bag   = nxChildren(n).find(c => c.tag==='node' && c.attr?.id===bagId);
+  if (!bag) return;
+
+  const bagKids = nxChildren(bag).find(c => c.tag==='children'); if (!bagKids) return;
+  const groups  = nxChildren(bagKids).filter(c => c.tag==='node' && c.attr?.id==='flaggroup');
+  const group   = groups[idx|0]; if (!group) return;
+
+  const fgKids  = nxChildren(group).find(c => c.tag==='children'); if (!fgKids) return;
+  const flag    = nxChildren(fgKids).find(c => c.tag==='node' && c.attr?.id==='flag'); if (!flag) return;
+
+  const ensure = (id, type) => (ensureAttr(flag, id, type).attr);
+
+  if (field === 'type') {
+    ensure('type','FixedString').value = String(rawValue||'');
+  } else if (field === 'UUID') {
+    ensure('UUID','FixedString').value = String(rawValue||'');
+  } else if (field === 'value') {
+    const a = ensure('value','bool');
+    const curr = String(a.value || '').toLowerCase() === 'true';
+    a.value = (!curr).toString();
+  } else if (field === 'paramval') {
+    ensure('paramval','int32').value = String(parseInt(rawValue||'0',10) || 0);
+  }
+}
+
+function saveDialogRootEdits() {
   const state = window.__dlgEdit;
   if (!state || !state.payload || !state.postUrl || !state.route) {
     alert('No dialog payload is loaded for editing.');
     return;
   }
 
+  // 1) Root-level fields
   const edits = collectDialogRootEdits();
   applyDialogRootEditsToNormalized(state.payload, edits);
 
-  // Build x-www-form-urlencoded body the controller expects
+  // 2) Node header fields (constructor/speaker/root/end)
+  document.querySelectorAll('[data-node-edit]').forEach(el => {
+    const uuid = el.closest('[data-node-uuid]')?.dataset.nodeUuid;
+    const kind = el.dataset.nodeEdit;
+    if (!uuid || !kind) return;
+
+    if (kind === 'children') return; // handled below
+
+    const val = el.matches('.editable-toggle') ? null : (el.value ?? el.textContent);
+    applyNodeHeaderEdit(state.payload, uuid, kind, val);
+  });
+
+  // 3) Children editor (textarea)
+  document.querySelectorAll('[data-node-edit="children"]').forEach(el => {
+    const uuid = el.dataset.nodeUuid || el.closest('[data-node-uuid]')?.dataset.nodeUuid;
+    applyNodeChildrenEdit(state.payload, uuid, el.value);
+  });
+
+  // 4) Line edits (LineId / Handle / Version / HasTagRule / Stub / Text[no-op])
+  document.querySelectorAll('[data-line-edit]').forEach(el => {
+    const uuid = el.closest('[data-node-uuid]')?.dataset.nodeUuid;
+    if (!uuid) return;
+    const idx  = parseInt(el.dataset.lineIdx || '0', 10);
+    const kind = el.dataset.lineEdit;
+    const val  = el.matches('.chip.toggle') ? null : el.textContent;
+    applyLineEdit(state.payload, uuid, idx, kind, val);
+  });
+
+  // 5) Flags
+  document.querySelectorAll('[data-flag-edit]').forEach(el => {
+    const uuid  = el.closest('[data-node-uuid]')?.dataset.nodeUuid;
+    if (!uuid) return;
+    const which = el.dataset.flagWhich;                 // 'Checkflags'|'Setflags'
+    const idx   = parseInt(el.dataset.flagIdx || '0', 10);
+    const field = el.dataset.flagEdit;                  // 'type'|'UUID'|'value'|'paramval'
+    const val   = el.matches('.editable-toggle') ? null : el.textContent;
+    applyFlagEdit(state.payload, uuid, which, idx, field, val);
+  });
+
+  // POST payload
   const form = new URLSearchParams();
   form.set('root', state.route.root);
   form.set('slug', state.route.slug);
-  // Use both keys to be compatible with either param name
   form.set('rel',  state.route.rel);
   form.set('relPath', state.route.rel);
-
-  // send the normalized tree as JSON string (what ContentService::save expects)
   form.set('data_json', JSON.stringify({ payload: state.payload }));
 
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (csrf) headers['X-CSRF-TOKEN'] = csrf;
 
-  let res, txt;
-  try {
-    res = await fetch(state.postUrl, {
-      method: 'POST',
-      credentials: 'same-origin', // send cookies for CSRF
-      headers: {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRF-TOKEN': csrf
-      },
-      body: form
+  fetch(state.postUrl, { method: 'POST', headers, body: form })
+    .then(async (res) => {
+      const txt = await res.text();
+      console.log('Save response status:', res.status);
+      console.log('Save response body:', txt);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      alert('Saved dialog changes.');
+    })
+    .catch((e) => {
+      console.error('Network error during save:', e);
+      alert('Save failed (network). See console.');
     });
-    txt = await res.text();
-  } catch (e) {
-    console.error('Network error during save:', e);
-    alert('Save failed (network). See console.');
-    return;
-  }
-
-  console.log('Save response status:', res.status);
-  console.log('Save response body:', txt);
-  if (!res.ok) {
-    alert(`Save failed (${res.status}). See console for details.`);
-    return;
-  }
-  alert('Saved Category / TimelineID.');
 }
 
 // Bind the Save button when dialog controls are mounted
