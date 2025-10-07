@@ -1271,8 +1271,7 @@ function renderDialogNodes(dlg, meta){
           <span class="head mono editable copyable" contenteditable="plaintext-only" data-copy="${esc(uuid)}">${esc(String(uuid))}</span>
         </header>
           <section class="dlg-node-body">
-            <div class="badge ctor" id="dlg_dis"> Constructor:
-              <select class="dlg-tag-select mono"
+            Constructor: <select class="dlg-tag-select mono"
                       data-node-edit="constructor">
                 ${(() => {
                   const listed = Array.isArray(dlg_tags) ? dlg_tags : [];
@@ -1286,11 +1285,9 @@ function renderDialogNodes(dlg, meta){
                   return extra + opts;
                 })()}
               </select>
-            </div>
-
-            <div class="badge ctor"> Show Once: <input type="checkbox" data-node-edit="showOnce" ${n.showOnce ? 'checked' : ''}> </div>
-            <div class="badge ctor">Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} /></div>
-            <div class="badge ctor">End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} /></div>
+            Show Once: <input type="checkbox" data-node-edit="showOnce" ${n.showOnce ? 'checked' : ''}> 
+            Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} />
+            End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} />
             ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
 
             ${texts ? `<div class="texts">${texts}</div>` : ''}
@@ -1300,32 +1297,19 @@ function renderDialogNodes(dlg, meta){
               <span class="v editable mono"
                       contenteditable="plaintext-only"
                       data-node-edit="speaker">${esc(spk == null ? '' : String(spk))}</span>
-            </div>
-            <!-- NEW: Group info -->
-            <div class="kv">
-              <span class="k">Group</span>
-              <span class="v">
-                ID:
-                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">
-                  ${esc(n.groupId ?? '')}
-                </span>
-                &nbsp;&nbsp;Index:
-                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">
-                  ${n.groupIndex ?? ''}
-                </span>
+              <span class="k">Group ID:</span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">
+                ${esc(n.groupId ?? '')}
               </span>
-            </div>
-
-            <!-- NEW: Approval rating -->
-            <div class="kv">
+              <span class="k">Group Index:</span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">
+                ${n.groupIndex ?? ''}
+              </span>
+              </span>
               <span class="k">Approval</span>
-              <span class="v">
-                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">
-                  ${n.approvalRating ?? ''}
-                </span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">
+                ${n.approvalRating ?? ''}
               </span>
-            </div>
-            <div class="kv">
               <span class="k-speaker">Children</span>
 
               <ul>${childrenHtml || '<li><span class="muted">none</span></li>'}</ul>
