@@ -380,6 +380,14 @@ final class DialogSummarizer
             if ($htr !== null) {
                 $hasTagRule = $this->boolish($htr);
             }
+            // --- ShowOnce / GroupId / GroupIndex / ApprovalRating ---
+            $showOnceStr      = $this->attrOnNode($ttParent, 'ShowOnce');
+            $groupId          = $this->attrOnNode($ttParent, 'GroupId') ?? $this->attrOnNode($ttParent, 'GroupID'); // handle both spellings
+            $groupIndexStr    = $this->attrOnNode($ttParent, 'GroupIndex');
+            $approvalRating   = $this->attrOnNode($ttParent, 'ApprovalRating') ?? $this->attrOnNode($ttParent, 'Approval'); // some LSX use "Approval"
+
+            $showOnce         = $this->boolish($showOnceStr);                     // bool|null
+            $groupIndex       = is_numeric($groupIndexStr) ? (int)$groupIndexStr : null;  // int|null
 
             // Collect TagText nodes within this TaggedText subtree
             $tagTexts = [];
@@ -448,7 +456,11 @@ final class DialogSummarizer
                 if ($text     !== null) $entry['text']       = $text;
                 if ($version  !== null) $entry['version']    = is_numeric($version) ? (int)$version : $version;
                 if ($stub)              $entry['stub']       = true;
-                                         $entry['hasTagRule'] = $hasTagRule;   // <-- carry from parent
+                if ($hasTagRule)        $entry['hasTagRule'] = $hasTagRule;
+                if ($showOnce !== null) $entry['showOnce']       = $showOnce;
+                if ($groupIndex !== null) $entry['groupIndex']     = $groupIndex;
+                if ($approvalRating !== null) $entry['approvalRating'] = $approvalRating;
+                if ($groupId !== null && $groupId !== '') $entry['groupId'] = $groupId;
 
                 if ($entry) $out[] = $entry;
             }

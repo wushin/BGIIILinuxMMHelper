@@ -1287,6 +1287,8 @@ function renderDialogNodes(dlg, meta){
                 })()}
               </select>
             </div>
+
+            <div class="badge ctor"> Show Once: <input type="checkbox" data-node-edit="showOnce" ${n.showOnce ? 'checked' : ''}> </div>
             <div class="badge ctor">Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} /></div>
             <div class="badge ctor">End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} /></div>
             ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
@@ -1299,7 +1301,30 @@ function renderDialogNodes(dlg, meta){
                       contenteditable="plaintext-only"
                       data-node-edit="speaker">${esc(spk == null ? '' : String(spk))}</span>
             </div>
+            <!-- NEW: Group info -->
+            <div class="kv">
+              <span class="k">Group</span>
+              <span class="v">
+                ID:
+                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">
+                  ${esc(n.groupId ?? '')}
+                </span>
+                &nbsp;&nbsp;Index:
+                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">
+                  ${n.groupIndex ?? ''}
+                </span>
+              </span>
+            </div>
 
+            <!-- NEW: Approval rating -->
+            <div class="kv">
+              <span class="k">Approval</span>
+              <span class="v">
+                <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">
+                  ${n.approvalRating ?? ''}
+                </span>
+              </span>
+            </div>
             <div class="kv">
               <span class="k-speaker">Children</span>
 
