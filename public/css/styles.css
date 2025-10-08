@@ -615,7 +615,7 @@ img.dynImg{max-width:100%;height:auto;display:block}
 .dlg-node-body .dlg-val.mono .k,.dlg-node-body .dlg-val.mono .k-speaker{color:#8b949e;font-weight:600;min-width:120px}
 
 /* Inline-edit (article) */
-.dlg-node-body .editable[contenteditable]{display:inline-block;min-width:6ch;padding:4px 6px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background-color .15s,box-shadow .15s}
+.dlg-node-body .editable[contenteditable]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#21262d;border:1px solid #30363d;border-radius:8px;padding:3px 8px;height:1.25em;width:330px;}
 .dlg-node-body .editable[contenteditable]:hover{border-color:#30363d;background:rgba(88,166,255,.06)}
 .dlg-node-body .editable[contenteditable]:focus{border-color:#58a6ff;border-style:solid;background:#0b1320;box-shadow:0 0 0 3px rgba(88,166,255,.25)}
 
@@ -674,6 +674,35 @@ img.dynImg{max-width:100%;height:auto;display:block}
   padding:0 !important;
   inline-size:auto;
   block-size:auto;
+}
+/* Make dialog line text contenteditable size to its content */
+.dlg-node .texts .dlg-val [data-line-edit="text"][contenteditable] {
+  flex: 0 0 auto;        /* don't stretch in the flex row */
+  display: inline-block; /* allow width to hug content */
+  width: fit-content;    /* intrinsic width */
+  max-width: 100%;       /* still wrap if very long */
+  white-space: pre-wrap; /* keep spaces/linebreaks */
+  word-break: break-word;
+  line-height: 1.25em;   /* match inputs */
+  min-height: 1.25em;
+  padding: 2px 6px;      /* keep your input-like feel */
+}
+/* Make groupId contenteditable size to its content */
+.dlg-node .dlg-node-body [data-node-edit="groupId"][contenteditable] {
+  flex: 0 0 auto;        /* don't stretch in flex rows */
+  display: inline-block; /* hug content */
+  width: fit-content;    /* intrinsic width */
+  max-width: 100%;       /* still wrap if very long */
+  white-space: pre-wrap; /* preserve spaces/linebreaks */
+  word-break: break-word;
+  line-height: 1.25em;
+  min-height: 1.25em;
+  padding: 2px 6px;      /* same input-like feel */
+}
+
+/* If this field appears inside a .kv grid row, keep it left-aligned/not stretched */
+.dlg-node .kv [data-node-edit="groupId"][contenteditable] {
+  justify-self: start;
 }
 .markdown-body{box-sizing:border-box;min-width:200px;max-width:980px;margin:0 auto;padding:24px}
 @media (max-width:768px){.markdown-body{padding:16px}}

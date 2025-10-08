@@ -633,10 +633,9 @@ function renderDialogNodes(dlg, meta){
 
     // Line ID
     parts.push(
-      `<div class="dlg-val mono"> Line Id: <input type="text" class="dlg-val mono"
+      `<div class="dlg-val mono"> Line Id: <span class="editable mono" contenteditable="plaintext-only"
             data-line-edit="lineId"
-            data-line-idx="${i}"
-            value="${esc(t.lineId || '')}" />
+            data-line-idx="${i}">${esc(t.lineId || '')}</span>
        </div>`
     );
 
@@ -646,27 +645,24 @@ function renderDialogNodes(dlg, meta){
 
     // Handle
     parts.push(
-      `<div class="dlg-val mono"> Handle: <input type="text" class="dlg-val mono"
+      `<div class="dlg-val mono"> Handle: <span class="editable mono" contenteditable="plaintext-only"
             data-line-edit="handle"
-            data-line-idx="${i}"
-            value="${esc(t.handle || '')}" />
+            data-line-idx="${i}">${esc(t.handle || '')}</span>
        </div>`
     );
 
     parts.push(
-      `<div class="dlg-val mono"> Text: <input type="text" class="dlg-val mono"
+      `<div class="dlg-val mono"> Text: <span class="editable mono" contenteditable="plaintext-only"
             data-line-edit="text"
-            data-line-idx="${i}"
-            value="${esc(shownText)}" />
+            data-line-idx="${i}">${esc(shownText)}</span>
        </div>`
     );
 
     // Version (attribute on TranslatedString)
     parts.push(
-      `<div class="dlg-val mono"> Version: <input type="text" class="dlg-val mono"
+      `<div class="dlg-val mono"> Version: <span class="editable mono" contenteditable="plaintext-only"
             data-line-edit="version"
-            data-line-idx="${i}"
-            value="${esc(String(t.version ?? t.Version ?? ''))}" />
+            data-line-idx="${i}">${esc(String(t.version ?? t.Version ?? ''))}</span>
        </div>`
     );
 
@@ -755,15 +751,11 @@ function renderDialogNodes(dlg, meta){
             </div>
             <div class="dlg-val mono">
               <span class="k">Group ID:</span>
-              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">
-                ${esc(n.groupId ?? '')}
-              </span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">${esc(n.groupId ?? '')}</span>
             </div>
             <div class="dlg-val mono">
               <span class="k">Group Index:</span>
-              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">
-                ${n.groupIndex ?? ''}
-              </span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">${n.groupIndex ?? ''}</span>
             </div>
             <div class="dlg-val mono">
             Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} />
@@ -779,9 +771,7 @@ function renderDialogNodes(dlg, meta){
             </div>
             <div class="dlg-val mono">
               <span class="k">Approval</span>
-              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">
-                ${n.approvalRating ?? ''}
-              </span>
+              <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">${n.approvalRating ?? ''}</span>
             </div>
             <div class="dlg-val mono">
             ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
