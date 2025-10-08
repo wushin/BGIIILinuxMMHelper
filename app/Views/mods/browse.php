@@ -39,541 +39,140 @@ function renderTree(array $nodes, ?string $selectedRel = '', int $depth = 0) {
 <?= $this->section('head') ?>
 <meta name="csrf-token" content="<?= csrf_hash() ?>">
 <style>
-:root {
-  --left-col: 360px;   /* JS will auto-size this */
-  --right-col: 400px;
-}
+:root{--left-col:360px;--right-col:400px}
 
-/* Wrap that matches main width & keeps columns together */
-.mod-wrap { margin:0 auto; padding:12px; }
-.columns {
-  display:grid;
-  grid-template-columns: var(--left-col) 1fr var(--right-col);
-  gap:12px;
-  align-items:stretch;
-}
+/* Layout shell */
+.mod-wrap{margin:0 auto;padding:12px}
+.columns{display:grid;grid-template-columns:var(--left-col) 1fr var(--right-col);gap:12px;align-items:stretch}
+#colLeft{display:flex;flex-direction:column;gap:12px;height:calc(100vh - var(--header-h) - 24px);min-height:0}
 
-/* LEFT COLUMN: stack MyMods card + Files tree panel */
-#colLeft {
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  height: calc(100vh - var(--header-h) - 24px);
-  min-height: 0; /* allow inner scrollers */
-}
+.sidebar-card,.panel{background:#0d1117;border:1px solid #21262d;border-radius:.5rem;box-sizing:border-box;display:flex;flex-direction:column;min-height:0;overflow:visible}
+.sidebar-card{flex:0 0 auto}
+.sidebar-card .head,.panel>.head{padding:.6rem .8rem;border-bottom:1px solid #21262d;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.sidebar-card .body{padding:.6rem .6rem .8rem;overflow:auto;min-height:0}
 
-.sidebar-card,
-.panel {
-  background:#0d1117; border:1px solid #21262d; border-radius:.5rem;
-  box-sizing:border-box; display:flex; flex-direction:column;
-  min-height:0;
-  overflow:visible;       /* neutralize any global .panel { overflow:auto } */
-}
-.sidebar-card { flex:0 0 auto; } /* don’t let it be squeezed by flex */
+.tree-panel{flex:1 1 auto;min-height:0;overflow:hidden}
+.tree-panel .body{padding:0;overflow:hidden;flex:1 1 auto;min-height:0}
+#tree{height:100%;padding:.6rem .4rem .8rem}
 
-.sidebar-card .head,
-.panel > .head {
-  padding:.6rem .8rem; border-bottom:1px solid #21262d; font-weight:600;
-  display:flex; align-items:center; justify-content:space-between; gap:.5rem;
-}
+/* Left list / tree */
+.mods-ul{list-style:none;margin:0;padding:0}
+.mods-ul li{margin:0}
+.mod-link{display:block;padding:.22rem .36rem;border-radius:.25rem;text-decoration:none;color:#c9d1d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mod-link:hover{background:#161b22}
+.mod-link.active{background:#14324a;outline:1px solid #1f6feb}
 
-/* MyMods body can scroll if long */
-.sidebar-card .body {
-  padding:.6rem .6rem .8rem;
-  overflow:auto;
-  min-height:0;
-}
+.node{padding:.2rem .4rem;border-radius:.25rem;cursor:pointer;user-select:none}
+.node:hover{background:#161b22}
+.node.dir{color:#c9d1d9}
+.node.file{color:#a5d6ff}
+.node.highlight{background:#14324a;outline:1px solid #1f6feb}
+.node-label{display:inline-block}
 
-/* Tree panel: only #tree may scroll */
-.tree-panel { flex:1 1 auto; min-height:0; overflow:hidden; }
-.tree-panel .body {
-  padding:0;
-  overflow:hidden;   /* wrapper does NOT scroll */
-  flex:1 1 auto;
-  min-height:0;
-}
-#tree {
-  height:100%;
-  padding:.6rem .4rem .8rem;
-}
+.panel.tall{height:calc(100vh - var(--header-h) - 24px);min-height:0}
+.panel>.body{padding:.8rem;overflow:auto;min-height:0}
 
-/* MyMods list as vertical list, no wrap */
-.mods-ul { list-style:none; margin:0; padding:0; }
-.mods-ul li { margin:0; }
-.mod-link {
-  display:block; padding:.22rem .36rem; border-radius:.25rem; text-decoration:none;
-  color:#c9d1d9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
-.mod-link:hover { background:#161b22; }
-.mod-link.active { background:#14324a; outline:1px solid #1f6feb; }
+/* Utils */
+.hidden{display:none!important}
+.muted{color:#8b949e}
+pre,code{white-space:pre-wrap;word-break:break-word}
+img.dynImg{max-width:100%;height:auto;display:block}
+.badgebar{display:flex;gap:8px;margin-bottom:.5rem;flex-wrap:wrap}
+.badge{font-size:.75rem;padding:.15rem .4rem;border:1px solid #21262d;border-radius:.25rem;background:#0c1320}
+.flash-red{background:#3a1114;border:1px solid #5a1a1f;padding:.4rem;border-radius:.25rem}
+.btn-icon{background:#0b1624;border:1px solid #21262d;color:#c9d1d9;border-radius:.35rem;padding:.25rem .5rem;font-size:.85rem;cursor:pointer}
+.btn-icon:hover{background:#111a2a}
 
-/* File tree items */
-.node { padding:.2rem .4rem; border-radius:.25rem; cursor:pointer; user-select:none; }
-.node:hover { background:#161b22; }
-.node.dir  { color:#c9d1d9; }
-.node.file { color:#a5d6ff; }
-.node.highlight { background:#14324a; outline:1px solid #1f6feb; }
-.node-label { display:inline-block; }
+/* Selected node highlight */
+.node.active{background:rgba(59,130,246,.15);outline:1px solid rgba(59,130,246,.65);border-radius:6px}
+.node.active .node-label{font-weight:600}
+.tree-panel .node:hover{background:rgba(255,255,255,.06)}
 
-/* Middle viewer & right details panels */
-.panel.tall { height: calc(100vh - var(--header-h) - 24px); min-height:0; }
-.panel > .body { padding:.8rem; overflow:auto; min-height:0; }
+/* ---- Dialog meta (left/top meta panel) ---- */
+#dialogMeta .dlg-h4,#dialogMeta .dlg-h5{margin:10px 0 6px;font-weight:600;color:#c9d1d9}
+#dialogMeta .dlg-row{display:grid;gap:8px 12px;align-items:center;padding:4px 0}
+#dialogMeta .dlg-label{color:#8b949e;font-size:.85rem}
+#dialogMeta .dlg-val{color:#c9d1d9;font-size:.92rem}
+#dialogMeta .dlg-val.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#21262d;border:1px solid #30363d;border-radius:8px;padding:3px 8px;line-height:1.25}
+#dialogMeta .dlg-val.mono.copyable{cursor:pointer;position:relative}
+#dialogMeta .dlg-val.mono.copyable::after{content:"Copy";position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:.7rem;color:#8b949e;opacity:0;transition:.15s}
+#dialogMeta .dlg-val.mono.copyable:hover::after{opacity:.9}
+#dialogMeta .dlg-val.editable{cursor:text}
+#dialogMeta .dlg-val[contenteditable="true"]{outline:1px dashed #58a6ff;background:#0f1620;border-radius:8px;border:1px solid #1f6feb}
+#dialogMeta .dlg-chiprow{display:flex;flex-wrap:wrap;gap:6px}
+#dialogMeta .chip{display:inline-flex;gap:6px;padding:4px 8px;border-radius:999px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-size:.85rem}
+#dialogMeta .chip-narrator{background:rgba(210,168,255,.12);color:#d2a8ff;border-color:rgba(210,168,255,.35)}
+#dialogMeta .dlg-table{width:100%;border-collapse:collapse;font-size:.88rem}
+#dialogMeta .dlg-table th,#dialogMeta .dlg-table td{padding:6px 8px;border-bottom:1px solid #30363d;color:#c9d1d9}
+#dialogMeta .dlg-table th{text-align:left;color:#8b949e}
+#dialogMeta .dlg-problems{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+#dialogMeta .dlg-problems .pill{padding:3px 8px;border-radius:999px;font-size:.8rem;background:rgba(48,54,61,.55);color:#c9d1d9;border:1px solid #30363d}
 
-/* Small utilities */
-.hidden{display:none !important;}
-.muted { color:#8b949e; }
-pre, code { white-space: pre-wrap; word-break: break-word; }
-img.dynImg { max-width:100%; height:auto; display:block; }
-.badgebar { display:flex; gap:8px; margin-bottom:.5rem; flex-wrap:wrap;}
-.badge { font-size:.75rem; padding:.15rem .4rem; border:1px solid #21262d; border-radius:.25rem; background:#0c1320;}
-.flash-red { background:#3a1114; border:1px solid #5a1a1f; padding:.4rem; border-radius:.25rem;}
+/* ---- Dialog node (article) ---- */
+.dlg-node{background:#0d1117;border:1px solid #21262d;border-radius:10px;box-shadow:0 0 0 1px rgba(48,54,61,.35),0 8px 24px rgba(1,4,9,.35);margin:6px 0}
+.dlg-node:hover{border-color:#30363d;box-shadow:0 0 0 1px rgba(48,54,61,.55),0 8px 24px rgba(1,4,9,.55)}
+.dlg-node.collapsed .dlg-node-body{display:none}
 
-.btn-icon {
-  background:#0b1624; border:1px solid #21262d; color:#c9d1d9;
-  border-radius:.35rem; padding:.25rem .5rem; font-size:.85rem; cursor:pointer;
-}
-.btn-icon:hover { background:#111a2a; }
+.dlg-node-hd{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #21262d;background:#0f141b;cursor:pointer}
+.dlg-node-hd .head{font-weight:600;color:#c9d1d9;padding:2px 6px;border-radius:6px}
+.dlg-node-hd .head.copyable:hover{background:rgba(88,166,255,.12)}
 
-/* Highlight for the selected file in the tree */
-.node.active {
-  background: rgba(59, 130, 246, 0.15);
-  outline: 1px solid rgba(59, 130, 246, 0.65);
-  border-radius: 6px;
-}
-.node.active .node-label { font-weight: 600; }
-.tree-panel .node:hover { background: rgba(255, 255, 255, 0.06); }
+.dlg-node-body{padding:10px 12px;display:grid;gap:12px}
 
-/* ---- Dialog meta (lives directly in #dialogMeta) ---- */
-#dialogMeta .dlg-h4, #dialogMeta .dlg-h5 { 
-  margin: 10px 0 6px; font-weight: 600; color:#c9d1d9;
-}
-#dialogMeta .dlg-row{
-  display:grid;
-  gap:8px 12px;
-  align-items:center;
-  padding:4px 0;
-}
-#dialogMeta .dlg-label{ color:#8b949e; font-size:.85rem; }
-#dialogMeta .dlg-val{ color:#c9d1d9; font-size:.92rem; }
+/* Row style inside article */
+.dlg-node-body .dlg-val.mono{display:flex;align-items:center;gap:10px;padding:4px 0;color:#c9d1d9;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dlg-node-body .dlg-val.mono .k,.dlg-node-body .dlg-val.mono .k-speaker{color:#8b949e;font-weight:600;min-width:120px}
 
-/* IDs look mono + copyable */
-#dialogMeta .dlg-val.mono{
-  font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
-  background:#21262d; border:1px solid #30363d; border-radius:8px;
-  padding:3px 8px; line-height:1.25;
-}
-#dialogMeta .dlg-val.mono.copyable{ cursor:pointer; position:relative; }
-#dialogMeta .dlg-val.mono.copyable::after{
-  content:"Copy"; position:absolute; right:6px; top:50%; transform:translateY(-50%);
-  font-size:.7rem; color:#8b949e; opacity:0; transition:.15s;
-}
-#dialogMeta .dlg-val.mono.copyable:hover::after{ opacity:.9; }
+/* Inline-edit (article) */
+.dlg-node-body .editable[contenteditable]{display:inline-block;min-width:6ch;padding:4px 6px;border:1px dashed transparent;border-radius:6px;transition:border-color .15s,background-color .15s,box-shadow .15s}
+.dlg-node-body .editable[contenteditable]:hover{border-color:#30363d;background:rgba(88,166,255,.06)}
+.dlg-node-body .editable[contenteditable]:focus{border-color:#58a6ff;border-style:solid;background:#0b1320;box-shadow:0 0 0 3px rgba(88,166,255,.25)}
 
-/* Inline editing */
-#dialogMeta .dlg-val.editable{ cursor:text; }
-#dialogMeta .dlg-val[contenteditable="true"]{
-  outline:1px dashed #58a6ff; background:#0f1620; border-radius:8px; border:1px solid #1f6feb;
-}
+/* Inputs/selects in article */
+.dlg-node select.dlg-tag-select{min-width:14ch;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 28px 6px 8px;outline:0;appearance:none;background-image:linear-gradient(45deg,transparent 50%,#8b949e 50%),linear-gradient(135deg,#8b949e 50%,transparent 50%),linear-gradient(to right,transparent,transparent);background-position:calc(100% - 16px) 50%,calc(100% - 10px) 50%,0 0;background-size:6px 6px,6px 6px,100% 100%;background-repeat:no-repeat}
+.dlg-node select.dlg-tag-select:focus{border-color:#58a6ff;box-shadow:0 0 0 3px rgba(88,166,255,.3);background:#0b1320}
 
-/* Chips & table */
-#dialogMeta .dlg-chiprow{ display:flex; flex-wrap:wrap; gap:6px; }
-#dialogMeta .chip{
-  display:inline-flex; gap:6px; padding:4px 8px; border-radius:999px;
-  background:#21262d; border:1px solid #30363d; color:#c9d1d9; font-size:.85rem;
-}
-#dialogMeta .chip-narrator{ background:rgba(210,168,255,.12); color:#d2a8ff; border-color:rgba(210,168,255,.35); }
+.dlg-node input[type="text"],.dlg-node input:not([type]),.dlg-node textarea{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 8px;outline:0}
+.dlg-node input:focus,.dlg-node textarea:focus{border-color:#58a6ff;box-shadow:0 0 0 3px rgba(88,166,255,.3);background:#0b1320}
+.dlg-node input[type="checkbox"]{accent-color:#1f6feb;transform:translateY(1px)}
 
-#dialogMeta .dlg-table{ width:100%; border-collapse:collapse; font-size:.88rem; }
-#dialogMeta .dlg-table th,#dialogMeta .dlg-table td{ padding:6px 8px; border-bottom:1px solid #30363d; color:#c9d1d9; }
-#dialogMeta .dlg-table th{ color:#8b949e; text-align:left; }
+/* Children chips (article) */
+.dlg-node-body .dlg-val.mono ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.chip-uuid{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85rem;text-decoration:none}
+.chip-uuid .short{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip-uuid:hover{border-color:#58a6ff;background:rgba(88,166,255,.12)}
+.endnote{margin-top:6px;color:#8b949e;font-style:italic}
 
-#dialogMeta .dlg-problems{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
-#dialogMeta .dlg-problems .pill{
-  padding:3px 8px; border-radius:999px; font-size:.8rem;
-  background:rgba(48,54,61,.55); color:#c9d1d9; border:1px solid #30363d;
-}
-/* Dialog node shell */
-.dlg-node {
-  border: 1px solid #21262d;
-  border-radius: 10px;
-  background: #0d1117;
-  margin: 6px 0;
-}
+/* Flags block */
+.flag-group{margin-top:10px;border:1px solid #30363d;border-radius:8px;background:#0f1319}
+.flag-title{padding:6px 8px;border-bottom:1px solid #30363d;font-weight:600;color:#c9d1d9;display:flex;justify-content:space-between;align-items:center}
+.flag-title .count{color:#8b949e;font-weight:400}
+.flag-group ul{list-style:none;margin:0;padding:8px;display:grid;gap:8px}
+.flag-li{display:grid;grid-template-columns:repeat(4,max-content) 1fr;gap:6px 12px;align-items:center}
+.flag-li code{display:inline-flex;align-items:center;gap:6px;background:#21262d;border:1px solid #30363d;border-radius:6px;padding:2px 6px;font-size:.8rem;color:#c9d1d9}
+.flag-type-select.mono{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 6px}
+.flag-li .editable-toggle{cursor:pointer;padding:2px 6px;border-radius:6px;background:#10243a;border:1px solid #30363d}
+.flag-li .editable-toggle:hover{border-color:#58a6ff;background:rgba(88,166,255,.12)}
 
-/* Hide body/meta/children when collapsed */
-.dlg-node.collapsed .dlg-node-body {
-  display: none;
-}
+/* Text lines block inside article */
+.texts{display:grid;gap:10px}
+.texts .line{display:grid;gap:8px;padding:10px;background:#0f1620;border:1px solid #30363d;border-radius:10px}
+.texts .line:hover{border-color:#3b82f6}
+.texts .dlg-val{display:flex;align-items:center;gap:8px;color:#c9d1d9;font-size:.9rem}
+.texts .dlg-val .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.texts .dlg-val input[type="text"]{flex:1 1 auto;min-width:24ch}
+.texts .line-text{flex:1 1 100%;margin-top:2px;padding-left:10px;border-left:2px solid #30363d;color:#c9d1d9;line-height:1.35;word-break:break-word}
+.texts .line-missing{flex:1 1 100%;padding-left:10px;border-left:2px solid #5a1a1f;color:#ffa198;font-style:italic}
 
-/* (optional) nicer shell & clickable header */
-.dlg-node { border:1px solid #21262d; border-radius:10px; background:#0d1117; margin:6px 0; }
-.dlg-node-hd { display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #21262d; cursor:pointer; }
-/* --- Dialog node body formatting --- */
-.dlg-node-body { padding: 8px 10px; }
+/* Speaker label tweak */
+.k-speaker{font-size:1rem;font-weight:600}
 
-/* key–value rows */
-.kv {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 6px 12px;
-  align-items: center;
-  margin: 4px 0;
-}
-.kv .v { color: #c9d1d9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Copy affordance on header id */
+.copyable{position:relative}
+.copyable:hover::after{content:"Click to copy";position:absolute;left:0;top:100%;transform:translateY(4px);background:#111827;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:2px 6px;font-size:11px;white-space:nowrap}
 
-/* children list → chips */
-.chip-uuid {
-  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
-  border-radius: 999px;
-  background: #21262d; border: 1px solid #30363d;
-  color: #c9d1d9;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: .85rem; text-decoration: none;
-}
-.chip-uuid .short {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.endnote { margin-top: 6px; color: #8b949e; font-style: italic; }
-
-/* flags group */
-.flag-group { margin-top: 10px; border: 1px solid #30363d; border-radius: 8px; background: #0f1319; }
-.flag-title {
-  padding: 6px 8px; border-bottom: 1px solid #30363d; font-weight: 600; color: #c9d1d9;
-  display: flex; justify-content: space-between; align-items: center;
-}
-.flag-title .count { color: #8b949e; font-weight: 400; }
-.flag-group ul { list-style: none; margin: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 8px; }
-.flag-li {
-  display: grid;
-  grid-template-columns: repeat(4, max-content) 1fr;
-  gap: 6px 12px; align-items: center;
-}
-.flag-li code {
-  background: #21262d; border: 1px solid #30363d; border-radius: 6px;
-  padding: 2px 6px; font-size: .8rem;
-}
-/* quick highlight pulse for speaker chip on paramval click */
-.chip-flash {
-  box-shadow: 0 0 0 2px #1f6feb, 0 0 12px rgba(31, 111, 235, 0.55);
-  background: rgba(31, 111, 235, 0.18);
-  transition: box-shadow .2s ease, background .2s ease;
-}
-/* --- Dialog line formatting (GitHub dark friendly) --- */
-.texts { display: flex; flex-direction: column; gap: 8px; }
-
-.texts .line {
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid #30363d;
-  background: #0f1620;
-  border-radius: 10px;
-}
-
-.texts .line:hover { border-color: #3b82f6; }
-
-/* ID + handle as compact chips */
-.texts .line-id,
-.texts .line-handle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #21262d;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  font-size: .82rem;
-}
-
-.texts .line-id.mono,
-.texts .line-handle.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-/* Keep very long handles from blowing up the layout */
-.texts .line-handle {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The actual localized text goes on its own row */
-.texts .line-text {
-  flex: 1 1 100%;
-  margin-top: 2px;
-  padding-left: 10px;
-  border-left: 2px solid #30363d;
-  color: #c9d1d9;
-  line-height: 1.35;
-  word-break: break-word;
-}
-
-/* Optional: a subtle “missing” style if there’s no text */
-.texts .line-missing {
-  flex: 1 1 100%;
-  padding-left: 10px;
-  border-left: 2px solid #5a1a1f;
-  color: #ffa198;
-  font-style: italic;
-}
-
-/* Only the "Speaker" label */
-.k-speaker {
-  font-size: 1rem;    /* was ~.85–.92rem */
-  font-weight: 600;   /* optional: make it a bit bolder */
-}
-
-.dlg-val.editable[contenteditable] {
-  outline: 1px dashed transparent;
-  cursor: text;
-}
-.dlg-val.editable[contenteditable]:focus {
-  outline-color: var(--accent, #888);
-  background: rgba(0,0,0,0.03);
-}
-
-/* ---------------------------------------------------------
-   Dialog Node (article) – GitHub Dark aligned, CSS-only
-   (no HTML changes required)
---------------------------------------------------------- */
-
-/* Card shell polish */
-.dlg-node {
-  background:#0d1117;
-  border:1px solid #21262d;
-  border-radius:10px;
-  box-shadow: 0 0 0 1px rgba(48,54,61,.35), 0 8px 24px rgba(1,4,9,.35);
-}
-.dlg-node:hover {
-  border-color:#30363d;
-  box-shadow: 0 0 0 1px rgba(48,54,61,.55), 0 8px 24px rgba(1,4,9,.55);
-}
-
-/* Header */
-.dlg-node-hd {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:8px 10px;
-  border-bottom:1px solid #21262d;
-  background:#0f141b;
-}
-.dlg-node-hd .head {
-  font-weight:600;
-  color:#c9d1d9;
-  padding:2px 6px;
-  border-radius:6px;
-}
-.dlg-node-hd .head.copyable:hover {
-  background:rgba(88,166,255,.12);
-}
-
-/* Body layout */
-.dlg-node-body {
-  padding:10px 12px;
-  display:grid;
-  gap:12px;
-}
-
-/* Badges row (Root/End/Constructor) */
-.dlg-node .badge {
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 8px;
-  border-radius:8px;
-  background:#0e1622;
-  border:1px solid #21262d;
-  color:#c9d1d9;
-  font-size:.82rem;
-}
-.dlg-node .badge.ctor { background:#0f1a2b; }
-
-/* Select (constructor) */
-.dlg-node select.dlg-tag-select {
-  min-width: 14ch;
-  background:#0d1117;
-  color:#c9d1d9;
-  border:1px solid #30363d;
-  border-radius:6px;
-  padding:6px 28px 6px 8px;
-  outline:0;
-  appearance:none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #8b949e 50%),
-    linear-gradient(135deg, #8b949e 50%, transparent 50%),
-    linear-gradient(to right, transparent, transparent);
-  background-position:
-    calc(100% - 16px) 50%,
-    calc(100% - 10px) 50%,
-    0 0;
-  background-size:6px 6px, 6px 6px, 100% 100%;
-  background-repeat:no-repeat;
-}
-.dlg-node select.dlg-tag-select:focus {
-  border-color:#58a6ff;
-  box-shadow:0 0 0 3px rgba(88,166,255,.3);
-  background:#0b1320;
-}
-
-/* Inputs (line fields) */
-.dlg-node input[type="input"],
-.dlg-node input[type="text"],
-.dlg-node input:not([type]),
-.dlg-node textarea {
-  background:#0d1117;
-  color:#c9d1d9;
-  border:1px solid #30363d;
-  border-radius:6px;
-  padding:6px 8px;
-  outline:0;
-}
-.dlg-node input:focus,
-.dlg-node textarea:focus {
-  border-color:#58a6ff;
-  box-shadow:0 0 0 3px rgba(88,166,255,.3);
-  background:#0b1320;
-}
-
-/* Checkboxes use GitHub accent */
-.dlg-node input[type="checkbox"] {
-  accent-color:#1f6feb;
-  transform: translateY(1px);
-}
-
-/* Contenteditable spans look like inputs when focused */
-.dlg-node .editable[contenteditable] {
-  display:inline-block;
-  min-width:6ch;
-  padding:2px 6px;
-  border:1px dashed transparent;
-  border-radius:6px;
-  transition:border-color .15s, background-color .15s;
-}
-.dlg-node .editable[contenteditable]:hover {
-  border-color:#30363d;
-  background:rgba(88,166,255,.06);
-}
-.dlg-node .editable[contenteditable]:focus {
-  border-style:solid;
-  border-color:#58a6ff;
-  box-shadow:0 0 0 3px rgba(88,166,255,.25);
-  background:#0b1320;
-}
-
-/* Text lines block */
-.texts { display:grid; gap:10px; }
-.texts .line {
-  display:grid;
-  gap:8px;
-  padding:10px;
-  background:#0f1620;
-  border:1px solid #30363d;
-  border-radius:10px;
-}
-.texts .line:hover { border-color:#3b82f6; }
-
-/* Each .dlg-val (label + control inline) */
-.texts .dlg-val {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  color:#c9d1d9;
-  font-size:.9rem;
-}
-.texts .dlg-val .mono { font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
-
-/* Make the inline inputs not overgrow */
-.texts .dlg-val input[type="input"] {
-  flex:1 1 auto;
-  min-width: 24ch;
-}
-
-/* Key/Value rows (Speaker / Children) */
-.kv {
-  display:grid;
-  grid-template-columns: 120px 1fr;
-  gap:6px 12px;
-  align-items:center;
-}
-.k-speaker { color:#8b949e; font-weight:600; }
-.kv .v { color:#c9d1d9; }
-
-/* Children list chips */
-.kv ul {
-  list-style:none;
-  margin:0;
-  padding:0;
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-}
-.kv ul a.chip-uuid {
-  display:inline-flex; align-items:center; gap:6px;
-  padding:4px 8px;
-  background:#0c1726;
-  border:1px solid #30363d;
-  border-radius:999px;
-  color:#c9d1d9;
-  text-decoration:none;
-  font-family: ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:.85rem;
-}
-.kv ul a.chip-uuid:hover {
-  border-color:#58a6ff;
-  background:rgba(88,166,255,.12);
-}
-
-/* Flag groups */
-.flag-group {
-  border:1px solid #30363d;
-  border-radius:8px;
-  background:#0f1319;
-}
-.flag-title {
-  padding:6px 8px;
-  border-bottom:1px solid #30363d;
-  font-weight:600;
-  color:#c9d1d9;
-  display:flex; align-items:center; gap:8px;
-}
-.flag-title .count { color:#8b949e; font-weight:400; }
-.flag-group ul {
-  list-style:none; margin:0; padding:8px;
-  display:grid; gap:8px;
-}
-.flag-li code {
-  display:inline-flex; align-items:center; gap:6px;
-  background:#21262d;
-  border:1px solid #30363d;
-  border-radius:6px;
-  padding:2px 6px;
-  font-size:.8rem;
-  color:#c9d1d9;
-}
-.flag-li .editable-toggle {
-  cursor:pointer;
-  padding:2px 6px;
-  border-radius:6px;
-  background:#10243a;
-  border:1px solid #30363d;
-}
-.flag-li .editable-toggle:hover {
-  border-color:#58a6ff;
-  background:rgba(88,166,255,.12);
-}
-
-/* Copyable affordance (header IDs) */
-.copyable { position:relative; }
-.copyable:hover::after {
-  content:"Click to copy";
-  position:absolute;
-  left:0; top:100%; transform:translateY(4px);
-  background:#111827; color:#8b949e;
-  border:1px solid #30363d; border-radius:6px;
-  padding:2px 6px; font-size:11px; white-space:nowrap;
-}
+/* Quick highlight pulse utility */
+.chip-flash{box-shadow:0 0 0 2px #1f6feb,0 0 12px rgba(31,111,235,.55);background:rgba(31,111,235,.18);transition:box-shadow .2s ease,background .2s ease}
 </style>
 <?= $this->endSection() ?>
 
@@ -1170,7 +769,7 @@ function renderDialogNodes(dlg, meta){
 
     // Line ID
     parts.push(
-      `<div class="dlg-val mono"> Line Id: <input type="input" class="dlg-val mono"
+      `<div class="dlg-val mono"> Line Id: <input type="text" class="dlg-val mono"
             data-line-edit="lineId"
             data-line-idx="${i}"
             value="${esc(t.lineId || '')}" />
@@ -1183,7 +782,7 @@ function renderDialogNodes(dlg, meta){
 
     // Handle
     parts.push(
-      `<div class="dlg-val mono"> Handle: <input type="input" class="dlg-val mono"
+      `<div class="dlg-val mono"> Handle: <input type="text" class="dlg-val mono"
             data-line-edit="handle"
             data-line-idx="${i}"
             value="${esc(t.handle || '')}" />
@@ -1191,7 +790,7 @@ function renderDialogNodes(dlg, meta){
     );
 
     parts.push(
-      `<div class="dlg-val mono"> Text: <input type="input" class="dlg-val mono"
+      `<div class="dlg-val mono"> Text: <input type="text" class="dlg-val mono"
             data-line-edit="text"
             data-line-idx="${i}"
             value="${esc(shownText)}" />
@@ -1200,7 +799,7 @@ function renderDialogNodes(dlg, meta){
 
     // Version (attribute on TranslatedString)
     parts.push(
-      `<div class="dlg-val mono"> Version: <input type="input" class="dlg-val mono"
+      `<div class="dlg-val mono"> Version: <input type="text" class="dlg-val mono"
             data-line-edit="version"
             data-line-idx="${i}"
             value="${esc(String(t.version ?? t.Version ?? ''))}" />
@@ -1271,6 +870,7 @@ function renderDialogNodes(dlg, meta){
           <span class="head mono editable copyable" contenteditable="plaintext-only" data-copy="${esc(uuid)}">${esc(String(uuid))}</span>
         </header>
           <section class="dlg-node-body">
+            <div class="dlg-val mono">
             Constructor: <select class="dlg-tag-select mono"
                       data-node-edit="constructor">
                 ${(() => {
@@ -1285,36 +885,51 @@ function renderDialogNodes(dlg, meta){
                   return extra + opts;
                 })()}
               </select>
+            </div>
+            <div class="dlg-val mono">
             Show Once: <input type="checkbox" data-node-edit="showOnce" ${n.showOnce ? 'checked' : ''}> 
-            Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} />
-            End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} />
-            ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
-
-            ${texts ? `<div class="texts">${texts}</div>` : ''}
-
-            <div class="kv">
-              <span class="k-speaker">Speaker</span>
-              <span class="v editable mono"
-                      contenteditable="plaintext-only"
-                      data-node-edit="speaker">${esc(spk == null ? '' : String(spk))}</span>
+            </div>
+            <div class="dlg-val mono">
               <span class="k">Group ID:</span>
               <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupId">
                 ${esc(n.groupId ?? '')}
               </span>
+            </div>
+            <div class="dlg-val mono">
               <span class="k">Group Index:</span>
               <span class="editable mono" contenteditable="plaintext-only" data-node-edit="groupIndex">
                 ${n.groupIndex ?? ''}
               </span>
-              </span>
+            </div>
+            <div class="dlg-val mono">
+            Root Node: <input type="checkbox" data-node-edit="root" ${isRoot ? 'checked': ''} />
+            </div>
+            <div class="dlg-val mono">
+            End Node: <input type="checkbox" data-node-edit="endnode" ${isEnd  ? 'checked': ''} />
+            </div>
+            <div class="dlg-val mono">
+              <span class="k-speaker">Speaker</span>
+              <span class="v editable mono"
+                      contenteditable="plaintext-only"
+                      data-node-edit="speaker">${esc(spk == null ? '' : String(spk))}</span>
+            </div>
+            <div class="dlg-val mono">
               <span class="k">Approval</span>
               <span class="editable mono" contenteditable="plaintext-only" data-node-edit="approvalRating">
                 ${n.approvalRating ?? ''}
               </span>
-              <span class="k-speaker">Children</span>
-
-              <ul>${childrenHtml || '<li><span class="muted">none</span></li>'}</ul>
-
             </div>
+            <div class="dlg-val mono">
+            ${String(ctor).toLowerCase()==='nested' ? '<div class="badge nested">Nested</div>' : ''}
+            </div>
+
+
+            <div class="dlg-val mono">
+              <span class="k-speaker">Children</span>
+              <ul>${childrenHtml || '<li><span class="muted">none</span></li>'}</ul>
+            </div>
+
+            ${texts ? `<div class="texts">${texts}</div>` : ''}
 
             ${checks}${sets}
           </section>
