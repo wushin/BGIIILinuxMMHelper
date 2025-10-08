@@ -675,3 +675,29 @@ img.dynImg{max-width:100%;height:auto;display:block}
   inline-size:auto;
   block-size:auto;
 }
+.markdown-body{box-sizing:border-box;min-width:200px;max-width:980px;margin:0 auto;padding:24px}
+@media (max-width:768px){.markdown-body{padding:16px}}
+/* Optional: style the permalink symbol more like GitHub’s anchor (hidden until hover) */
+.markdown-body h1 .heading-permalink,
+.markdown-body h2 .heading-permalink,
+.markdown-body h3 .heading-permalink,
+.markdown-body h4 .heading-permalink,
+.markdown-body h5 .heading-permalink,
+.markdown-body h6 .heading-permalink { visibility:hidden; text-decoration:none; margin-right:.25em }
+.markdown-body h1:hover .heading-permalink,
+.markdown-body h2:hover .heading-permalink,
+.markdown-body h3:hover .heading-permalink,
+.markdown-body h4:hover .heading-permalink,
+.markdown-body h5:hover .heading-permalink,
+.markdown-body h6:hover .heading-permalink { visibility:visible }
+/* Optional: GitHub-like copy button on code blocks */
+.gh-codeblock{position:relative}
+.gh-copybtn{position:absolute;top:8px;right:8px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#c9d1d9;padding:4px 8px;font-size:12px;cursor:pointer}
+.gh-copied{position:absolute;top:8px;right:70px;background:#1f6f3f;border:1px solid #2ea043;color:#fff;padding:2px 6px;border-radius:6px;font-size:12px}
+#readmeContainer {
+  max-width: 980px;          /* keep your width */
+  margin-inline: auto;       /* center horizontally in LTR/RTL */
+  align-self: center;        /* centers if parent is flex/grid */
+  justify-self: center;      /* centers if parent is grid */
+}
+
